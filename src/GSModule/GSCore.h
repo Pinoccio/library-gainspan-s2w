@@ -43,6 +43,10 @@
 // Dump individual hex bytes
 //#define GS_DUMP_BYTES
 
+#ifndef lengthof
+#define lengthof(x) (sizeof(x) / sizeof(*x))
+#endif
+
 /**
  * This class allows talking to a Gainspan Serial2Wifi module. It's
  * intended for the GS1011MIPS module, but might also work with other
@@ -123,6 +127,35 @@ public:
    * @returns wether the data could be succesfully written.
    */
   bool writeData(cid_t cid, const uint8_t *buf, uint8_t len);
+
+/*******************************************************
+ * Methods for getting connection info
+ *******************************************************/
+
+  struct ConnectionInfo {
+    /** Is this connection currently open? */
+    bool connected : 1;
+    /**
+     * When true, an error has occurred and data was likely lost (e.g., buffer
+     * overflow or connection error). The connection might still be
+     * open, but it is probably best to close it and try again.
+     */
+    bool error : 1;
+    /** Remote IP. 0 means unknown */
+    uint32_t remote_ip;
+    /** Local port number. 0 means unknown. */
+    uint16_t local_port;
+    /** Remote port number. 0 means unknown. */
+    uint16_t remote_port;
+  };
+
+  /**
+   * Return information about the given cid.
+   * Only valid cids should be passed.
+   */
+  const ConnectionInfo& getConnectionInfo(cid_t cid) {
+    return this->connections[cid];
+  }
 
 /*******************************************************
  * Methods for writing commands / reading replies
@@ -401,6 +434,8 @@ protected:
    * buffer.
    */
   RXFrame tail_frame;
+
+  ConnectionInfo connections[MAX_CID + 1];
 
   #if __cplusplus >= 201103L
   static_assert( (1 << (sizeof(rx_async_len) * 8) >= sizeof(rx_async), "rx_async_len is too small for rx_async" );

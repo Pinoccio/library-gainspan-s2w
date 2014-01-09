@@ -32,8 +32,17 @@ int GSModule::connectTcp(const IPAddress& ip, uint16_t port)
   snprintf((char*)buf, sizeof(buf), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
   writeCommand("AT+NCTCP=%s,%d", buf, port);
   cid_t cid = INVALID_CID;
-  if (readResponse(&cid) != GS_SUCCESS)
-    cid = INVALID_CID;
+  if (readResponse(&cid) != GS_SUCCESS || cid > MAX_CID)
+    return INVALID_CID;
+
+  // TODO: Until https://github.com/arduino/Arduino/pull/1798 is merged,
+  // we have to remove the constness here.
+  this->connections[cid].remote_ip = const_cast<IPAddress&>(ip);
+  this->connections[cid].remote_port = port;
+  this->connections[cid].local_port = 0;
+  this->connections[cid].error = 0;
+  this->connections[cid].connected = 1;
+
   return cid;
 }
 

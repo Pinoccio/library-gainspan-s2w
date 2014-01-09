@@ -85,6 +85,8 @@ bool GSCore::_begin()
   if (!writeCommandCheckOk("AT+BDATA=1"))
     return false;
 
+  memset(this->connections, 0, sizeof(connections));
+
   return true;
 }
 
@@ -664,15 +666,15 @@ int GSCore::getData()
 void GSCore::dropData(uint8_t num_bytes) {
   while(num_bytes--) {
     cid_t cid;
-    readData(&cid);
-    #ifdef GS_LOG_ERRORS
-      SERIAL_PORT_MONITOR.print("rx_data is full, dropped byte for cid ");
-      SERIAL_PORT_MONITOR.println(cid);
-    #endif
-    // TODO: Mark this->head_frame.cid as broken
+    if (readData(&cid) >= 0) {
+      #ifdef GS_LOG_ERRORS
+        SERIAL_PORT_MONITOR.print("rx_data is full, dropped byte for cid ");
+        SERIAL_PORT_MONITOR.println(cid);
+      #endif
+      this->connections[cid].error = true;
+    }
   }
 }
-
 
 GSCore::GSResponse GSCore::processResponseLine(const uint8_t* buf, uint8_t len, cid_t *connect_cid)
 {
@@ -732,11 +734,19 @@ GSCore::GSResponse GSCore::processResponseLine(const uint8_t* buf, uint8_t len, 
 
       if (code == GS_SOCK_FAIL) {
         // ERROR: SOCKET: FAILURE <CID>
-        // TODO
+        // Documentation is unclear, but experimentation shows that when
+        // this happens, some data might have been lost and the
+        // connection is broken.
+        #ifdef GS_LOG_ERRORS
+          SERIAL_PORT_MONITOR.print("Socket error on cid ");
+          SERIAL_PORT_MONITOR.println(cid);
+        #endif
+        this->connections[cid].error = true;
+        this->connections[cid].connected = false;
         return GS_ASYNC_HANDLED;
       } else { // code == GS_ECIDCLOSE
         // DISCONNECT <CID>
-        // TODO
+        this->connections[cid].connected = false;
         return GS_ASYNC_HANDLED;
       }
     default:

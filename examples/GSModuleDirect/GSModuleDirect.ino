@@ -63,7 +63,7 @@ void setup() {
   uint8_t request[] = "GET / HTTP/1.0\r\n\r\n";
   gs.writeData(cid, request, sizeof(request) - 1);
 
-  while(true /* TODO: check connected status */) {
+  while(gs.getConnectionInfo(cid).connected) {
     int c = gs.readData(cid);
     if (c >= 0)
       Serial.write(c);
