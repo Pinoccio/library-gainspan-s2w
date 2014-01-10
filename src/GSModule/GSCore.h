@@ -66,6 +66,9 @@ public:
   /** Guaranteed to never match a valid CID */
   static const uint8_t INVALID_CID = 0xff;
 
+  /** Accepted by some functions to return data for any cid */
+  static const uint8_t ANY_CID = 0xfe;
+
   /** Biggest valid CID */
   static const uint8_t MAX_CID = 0xf;
 
@@ -337,9 +340,13 @@ protected:
    * Get the next data frame into tail_frame, without blocking. The
    * frame is loaded either from rx_data or by querying the module.
    *
-   * @returns true if a frame was available, or false otherwise.
+   * @param cid    The cid the caller is interested in.
+   *
+   * @returns true if a frame was available and it contains data for the
+   * given cid (or cid is CID_ANY), or false when no frame is available
+   * or it is for the wrong cid.
    */
-  bool getFrameHeader();
+  bool getFrameHeader(cid_t cid);
 
   /**
    * Get the next data byte, without blocking. The frame is loaded

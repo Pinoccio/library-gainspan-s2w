@@ -109,11 +109,7 @@ int GSCore::readData(cid_t cid)
     return -1;
 
   // First, make sure we have a valid frame header
-  if (!getFrameHeader())
-    return -1;
-
-  // If the next frame is for another cid, that must be read first
-  if (this->tail_frame.cid != cid)
+  if (!getFrameHeader(cid))
     return -1;
 
   return getData();
@@ -122,7 +118,7 @@ int GSCore::readData(cid_t cid)
 int GSCore::readData(cid_t *cid)
 {
   // First, make sure we have a valid frame header
-  if (!getFrameHeader())
+  if (!getFrameHeader(ANY_CID))
     return -1;
 
   int c = getData();
@@ -614,11 +610,14 @@ void GSCore::loadFrameHeader(RXFrame* frame)
   memcpy(frame, &this->rx_data[this->rx_data_tail], sizeof(*frame));
 }
 
-bool GSCore::getFrameHeader()
+bool GSCore::getFrameHeader(cid_t cid)
 {
   // Already have a valid frame header, nothing to do
   if (this->tail_frame.length != 0)
     return true;
+
+  if (cid != ANY_CID && this->tail_frame.cid != cid)
+    return false;
 
   if (this->rx_data_tail != this->rx_data_head) {
     // The current frame is empty, but there is still data in rx_data.
