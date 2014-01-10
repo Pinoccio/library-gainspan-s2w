@@ -285,13 +285,7 @@ GSCore::GSResponse GSCore::readResponse(uint8_t *buf, uint16_t* len, cid_t *conn
 GSCore::GSResponse GSCore::readResponse(uint8_t *connect_id)
 {
   while(true) {
-    int c = readRaw();
-    if (c == -1) {
-      // TODO: timeout?
-      continue;
-    }
-
-    GSResponse res = processIncoming(c, connect_id);
+    GSResponse res = processIncoming(readRaw(), connect_id);
     switch (res) {
       case GS_NO_RESPONSE:
       case GS_UNKNOWN_RESPONSE:
@@ -304,6 +298,7 @@ GSCore::GSResponse GSCore::readResponse(uint8_t *connect_id)
         // All other responses terminate the reply
         return res;
     }
+    // TODO: timeout?
   }
 }
 
