@@ -53,3 +53,12 @@ bool GSModule::setDhcp(bool enable, const char *hostname)
   else
     return writeCommandCheckOk("AT+NDHCP=%d", enable);
 }
+
+bool GSModule::setStaticIp(const IPAddress& ip, const IPAddress& netmask, const IPAddress& gateway)
+{
+  uint8_t ip_buf[16], nm_buf[16], gw_buf[16];
+  snprintf((char*)ip_buf, sizeof(ip_buf), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+  snprintf((char*)nm_buf, sizeof(nm_buf), "%d.%d.%d.%d", netmask[0], netmask[1], netmask[2], netmask[3]);
+  snprintf((char*)gw_buf, sizeof(gw_buf), "%d.%d.%d.%d", gateway[0], gateway[1], gateway[2], gateway[3]);
+  return writeCommandCheckOk("AT+NSET=%s,%s,%s", ip_buf, nm_buf, gw_buf);
+}

@@ -140,6 +140,14 @@ public:
   bool setDhcp(bool enable, const char *hostname = NULL);
 
   /**
+   * Set the static IP configuration.
+   *
+   * When associated and DHCP is disabled, the new configuration is
+   * applied immediately.
+   */
+  bool setStaticIp(const IPAddress& ip, const IPAddress& netmask, const IPAddress& gateway);
+
+  /**
    * Setup a new TCP connection to the given ip and port.
    *
    * @returns the cid of the new connection if succesful, INVALID_CID
