@@ -62,3 +62,10 @@ bool GSModule::setStaticIp(const IPAddress& ip, const IPAddress& netmask, const 
   snprintf((char*)gw_buf, sizeof(gw_buf), "%d.%d.%d.%d", gateway[0], gateway[1], gateway[2], gateway[3]);
   return writeCommandCheckOk("AT+NSET=%s,%s,%s", ip_buf, nm_buf, gw_buf);
 }
+
+bool GSModule::disconnect(cid_t cid)
+{
+  if (cid > MAX_CID)
+    return false;
+  return writeCommandCheckOk("AT+NCLOSE=%x", cid);
+}

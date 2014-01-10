@@ -154,6 +154,14 @@ public:
    * otherwise.
    */
   int connectTcp(const IPAddress& ip, uint16_t port);
+
+  /**
+   * Disconnect a connection.
+   *
+   * @param cid The cid to read data for. Can be an invalid cid, will
+   *            return false then.
+   */
+  bool disconnect(cid_t cid);
 };
 
 #endif // GS_MODULE_H
