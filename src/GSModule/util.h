@@ -29,7 +29,26 @@
 #ifndef GS_UTIL_H
 #define GS_UTIL_H
 
+#include <limits.h>
+
 #define lengthof(x) (sizeof(x) / sizeof(*x))
+
+// Macros to find the min and max value of a type. Based on macros in
+// the "limits" file in gcc / libstdc++.
+#define is_type_signed(T)     ((T)(-1) < 0)
+
+#define min_for_type(T) \
+  (is_type_signed (T) ? -max_for_type (T) - 1 : (T)0)
+
+#define max_for_type(T) \
+  (is_type_signed (T) ? \
+  (((((T)1 << (value_bits_for_type (T) - 1)) - 1) << 1) + 1) : \
+  (T)(~(T)0))
+
+#define value_bits_for_type(T) \
+  (sizeof(T) * __CHAR_BIT__ - is_type_signed (T))
+
+#define is_power_of_two(v) (v && ((v & (v-1)) == 0))
 
 #endif // GS_UTIL_H
 
