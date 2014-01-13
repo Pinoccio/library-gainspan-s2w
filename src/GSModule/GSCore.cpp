@@ -232,10 +232,15 @@ uint16_t GSCore::availableData(cid_t cid)
   return len;
 }
 
-bool GSCore::writeData(cid_t cid, const uint8_t *buf, uint8_t len)
+bool GSCore::writeData(cid_t cid, const uint8_t *buf, uint16_t len)
 {
   if (cid > MAX_CID)
     return false;
+
+  // Hardware doesn't support more than 1400, according to SERIAL-TO-WIFI ADAPTER
+  // APPLICATION PROGRAMMING GUIDE, section 3.4.1 ("Bulk data Tx and Rx")
+  if (len > 1400)
+    return writeData(cid, buf, 1400) && writeData(cid, buf + 1400, len - 1400);
 
   uint8_t header[8]; // Including a trailing 0 that snprintf insists to write
   // TODO: Also support UDP server
@@ -403,7 +408,7 @@ GSCore::GSResponse GSCore::readResponse(uint8_t *connect_id)
 }
 
 
-void GSCore::writeRaw(const uint8_t *buf, uint8_t len)
+void GSCore::writeRaw(const uint8_t *buf, uint16_t len)
 {
   #ifdef GS_DUMP_BYTES
   for (uint8_t i = 0; i < len; ++i) {

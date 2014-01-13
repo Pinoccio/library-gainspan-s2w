@@ -163,9 +163,14 @@ public:
   /**
    * Write connection data for the given cid.
    *
+   * @param cid    The cid to write data to. Can be an invalid cid, will
+   *               return 0 then.
+   * @param buf    The data to send.
+   * @param len    The number of bytes to send.
+   *
    * @returns wether the data could be succesfully written.
    */
-  bool writeData(cid_t cid, const uint8_t *buf, uint8_t len);
+  bool writeData(cid_t cid, const uint8_t *buf, uint16_t len);
 
 /*******************************************************
  * Methods for getting connection info
@@ -289,7 +294,7 @@ public:
    * You should not normally use this method, instead use either
    * writeCommand() or writeData().
    */
-  void writeRaw(const uint8_t *buf, uint8_t len);
+  void writeRaw(const uint8_t *buf, uint16_t len);
 
   /**
    * Reads a single byte from the module, or returns -1 when no byte is available.
