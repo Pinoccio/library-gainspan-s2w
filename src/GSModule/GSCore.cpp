@@ -27,6 +27,7 @@
 #include <SPI.h>
 #include <Arduino.h>
 #include "GSCore.h"
+#include "util.h"
 
 /*******************************************************
  * Methods for setting up the module

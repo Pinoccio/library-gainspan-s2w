@@ -43,9 +43,6 @@
 // Dump individual hex bytes
 //#define GS_DUMP_BYTES
 
-#ifndef lengthof
-#define lengthof(x) (sizeof(x) / sizeof(*x))
-#endif
 
 /**
  * This class allows talking to a Gainspan Serial2Wifi module. It's

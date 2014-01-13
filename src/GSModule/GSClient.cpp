@@ -1,4 +1,5 @@
 #include "GSClient.h"
+#include "util.h"
 
 int GSClient::connect(IPAddress ip, uint16_t port)
 {

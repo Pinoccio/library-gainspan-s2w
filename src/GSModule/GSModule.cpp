@@ -25,6 +25,7 @@
  */
 
 #include "GSModule.h"
+#include "util.h"
 
 int GSModule::connectTcp(const IPAddress& ip, uint16_t port)
 {
