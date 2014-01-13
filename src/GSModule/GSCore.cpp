@@ -103,16 +103,75 @@ void GSCore::end()
  * Methods for reading and writing data
  *******************************************************/
 
+int GSCore::peekData(cid_t cid)
+{
+  // If availableData returns non-zero, then at least one byte is
+  // available in the buffer, so we can just return that without further
+  // checking.
+  if (availableData(cid) > 0)
+    return this->rx_data[this->rx_data_tail];
+  return -1;
+}
+
 int GSCore::readData(cid_t cid)
 {
-  if (cid > MAX_CID)
-    return -1;
-
   // First, make sure we have a valid frame header
   if (!getFrameHeader(cid))
     return -1;
 
   return getData();
+}
+
+size_t GSCore::readData(cid_t cid, uint8_t *buf, size_t size)
+{
+  // First, make sure we have a valid frame header
+  if (!getFrameHeader(cid))
+    return 0;
+
+  if (this->rx_data_tail != this->rx_data_head) {
+    // There is data in the buffer. Find out how much data we can read
+    // consecutively
+    rx_data_index_t len;
+    if (this->rx_data_head > this->rx_data_tail) {
+      // Data can be read from the tail to the head
+      len = this->rx_data_head - this->rx_data_tail;
+    } else {
+      // Data can be read from the tail to the end of the buffer
+      len = sizeof(this->rx_data) - this->rx_data_tail;
+    }
+    // Don't read beyond the end of the frame
+    if (len > this->tail_frame.length)
+      len = this->tail_frame.length;
+    // Don't write beyond the end of the buffer
+    if (len > size)
+      len = size;
+    memcpy(buf, &this->rx_data[this->rx_data_tail], len);
+    this->rx_data_tail = (this->rx_data_tail + len) % sizeof(this->rx_data);
+    // If the buffer isn't full yet, call ourselves again to read more
+    // data:
+    //  - From the start of the buffer if we read up to the end of rx_data
+    //  - From a next frame, if we read up to the end of the frame
+    //  - From the module directly, if we emptied rx_data
+    if (len != size)
+      len += readData(cid, buf + len, size - len);
+    return len;
+  } else {
+    // No data buffered, try reading from the module directly, as long
+    // as it keeps sending us data
+    size_t read = 0;
+    while (read < size) {
+      int c = readRaw();
+      if (c == -1)
+        break;
+      buf[read++] = c;
+      this->tail_frame.length--;
+      if(--this->head_frame.length == 0) {
+        this->rx_state = GS_RX_RESPONSE;
+        break;
+      }
+    }
+    return read;
+  }
 }
 
 int GSCore::readData(cid_t *cid)
@@ -127,6 +186,41 @@ int GSCore::readData(cid_t *cid)
   return c;
 }
 
+GSCore::cid_t GSCore::firstCidWithData()
+{
+  if (!getFrameHeader(ANY_CID))
+    return INVALID_CID;
+  return this->tail_frame.cid;
+}
+
+uint16_t GSCore::availableData(cid_t cid)
+{
+  if (!getFrameHeader(cid))
+    return 0;
+
+  // If we return a number here, we must be sure that that many bytes
+  // can actually be read without blocking (e.g., applications should be
+  // able to call readData() for this many times without it returning
+  // -1).
+  //
+  // This means that we can only return the number of bytes actually
+  // available in our buffer (even in SPI mode, we have no guarantee
+  // that we can actually pull data directly after receiving the frame
+  // header...).
+  //
+  // However, we should be careful with returning 0 here. A common
+  // strategy is to poll available() and only call read() when
+  // available() returns > 0. So we should only return 0 when really is
+  // no data available. For this reason, if our buffer is empty, try to
+  // read at least one byte from the module.
+  if (this->rx_data_head == this->rx_data_tail)
+    processIncomingAsyncOnly(readRaw());
+
+  uint16_t len = (this->rx_data_head - this->rx_data_tail) % sizeof(this->rx_data);
+  if (len > this->tail_frame.length)
+    len = this->tail_frame.length;
+  return len;
+}
 
 bool GSCore::writeData(cid_t cid, const uint8_t *buf, uint8_t len)
 {

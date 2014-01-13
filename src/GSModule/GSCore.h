@@ -100,6 +100,17 @@ public:
  *******************************************************/
 
   /**
+   * Read a single byte of data for the given cid, without removing it
+   * from the buffer.
+   *
+   * @param cid The cid to read data for. Can be an invalid cid, will
+   *            return -1 then.
+   *
+   * @see the notes for readData(cid_t), which also apply here.
+   */
+  int peekData(cid_t cid);
+
+  /**
    * Read a single byte of data for the given cid.
    *
    * Be careful when polling this method for data. If data is available
@@ -115,6 +126,20 @@ public:
   int readData(cid_t cid);
 
   /**
+   * Read up to size bytes of data.
+   *
+   * @param cid    The cid to read data for. Can be an invalid cid, will
+   *               return -1 then.
+   * @param buf    The buffer into which the data will be stored.
+   * @param size   The number of bytes available in the buffer.
+   *
+   * @returns the number of bytes written to the buffer.
+   *
+   * @see the notes for readData(cid_t), which also apply here.
+   */
+  size_t readData(cid_t cid, uint8_t *buf, size_t size);
+
+  /**
    * Read a single byte of data, for any cid.
    *
    * @param   cid   If the return value is not -1, the cid for which
@@ -123,6 +148,20 @@ public:
    * @returns the data byte, or -1 if no data is available.
    */
   int readData(cid_t *cid);
+
+  /**
+   * @returns the cid for which data can be read, or INVALID_CID if no
+   * data is currently avaiable.
+   */
+  cid_t firstCidWithData();
+
+  /**
+   * Return the number of bytes that can be read without blocking.
+   *
+   * @param cid The cid to get available data for. Can be an invalid
+   *            cid, will return 0 then.
+   */
+  uint16_t availableData(cid_t cid);
 
   /**
    * Write connection data for the given cid.
