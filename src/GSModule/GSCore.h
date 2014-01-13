@@ -480,15 +480,6 @@ protected:
 
   ConnectionInfo connections[MAX_CID + 1];
 
-  #if __cplusplus >= 201103L
-  static_assert( (1L << (sizeof(rx_async_len) * 8)) >= sizeof(rx_async), "rx_async_len is too small for rx_async" );
-  static_assert( (1L << (sizeof(rx_data_index_t) * 8)) >= sizeof(rx_data), "rx_data_index_t is too small for rx_data" );
-  // This is needed to guarantee proper negative wraparound. Also, it
-  // guarantees that sizeof(rx_data) is a power-of-two, which makes all
-  // modulo operations efficient bitwise ands.
-  static_assert( (1L << (sizeof(rx_data_index_t) * 8)) % sizeof(rx_data) == 0, "rx_data size is not a divisor of the rx_data_index_t wraparound value (== not a power of two)" );
-  #endif
-
   /** Value for the ss attribute when SPI is not enabled. */
   static const uint8_t SPI_DISABLED = 0xff;
   /** This byte is sent when there is no real data */
