@@ -50,6 +50,19 @@
 
 #define is_power_of_two(v) (v && ((v & (v-1)) == 0))
 
+#if __cplusplus < 201103L
+// C++11 defines this nice static_assert macro, but otherwise emulate it
+// (with less pretty error messages, but at least the checks are being
+// done).
+template<bool T> struct STATIC_ASSERTION;
+template<> struct STATIC_ASSERTION<true> {typedef int SUCCESS; };
+
+#define compiletime_concat(a, b) compiletime_concat2(a, b)
+#define compiletime_concat2(a, b) a ## b
+#define static_assert(condition, message) \
+  typedef STATIC_ASSERTION<(bool)(condition)>::SUCCESS compiletime_concat(static_assert_, __LINE__ ) __attribute__((__unused__))
+#endif // __cplusplus < 201103L
+
 #endif // GS_UTIL_H
 
 // vim: set sw=2 sts=2 expandtab:

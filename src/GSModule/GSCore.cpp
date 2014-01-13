@@ -37,7 +37,6 @@ GSCore::GSCore()
 {
   this->ss = SPI_DISABLED;
 
-  #if __cplusplus >= 201103L
   static_assert( max_for_type(__typeof__(rx_async_len)) >= sizeof(rx_async) - 1, "rx_async_len is too small for rx_async" );
   static_assert( max_for_type(rx_data_index_t) >= sizeof(rx_data) - 1, "rx_data_index_t is too small for rx_data" );
   // Check that the buffer size is a power of two, which makes all
@@ -46,7 +45,6 @@ GSCore::GSCore()
   // definition) is divisible by the buffer size, which is needed to
   // guarantee proper negative wraparound.
   static_assert( is_power_of_two(sizeof(rx_data)), "rx_data size is not a power of two" );
-  #endif
 }
 
 bool GSCore::begin(Stream &serial)
@@ -631,11 +629,9 @@ GSCore::GSResponse GSCore::processIncoming(int c, cid_t *connect_cid)
       this->head_frame.length *= 10;
       this->head_frame.length += (c - '0');
 
-      #if __cplusplus >= 201103L
       static_assert( (int)GS_RX_ESC_Z_LEN0 + 1 == (int)GS_RX_ESC_Z_LEN1, "GS_RX_ESC_Z_LENx values not consecutive?");
       static_assert( (int)GS_RX_ESC_Z_LEN1 + 1 == (int)GS_RX_ESC_Z_LEN2, "GS_RX_ESC_Z_LENx values not consecutive?");
       static_assert( (int)GS_RX_ESC_Z_LEN2 + 1 == (int)GS_RX_ESC_Z_LEN3, "GS_RX_ESC_Z_LENx values not consecutive?");
-      #endif
 
       if (this->rx_state != GS_RX_ESC_Z_LEN3) {
         this->rx_state = (RXState)((int)this->rx_state + 1);
