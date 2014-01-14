@@ -74,4 +74,8 @@ GSClient::operator bool()
   return (this->cid != GSModule::INVALID_CID);
 }
 
+bool GSClient::enableTls(const char *certname)
+{
+  return gs.enableTls(this->cid, certname);
+}
 // vim: set sw=2 sts=2 expandtab:

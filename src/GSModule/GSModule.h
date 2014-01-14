@@ -148,6 +148,59 @@ public:
   bool setStaticIp(const IPAddress& ip, const IPAddress& netmask, const IPAddress& gateway);
 
   /**
+   * Perform TLS handshaking. Should be called after a connection is
+   * opened, but before any data is sent. After this, all data sent will
+   * be encrypted.
+   *
+   * The certname is the name of a certificate previously set through
+   * addCert. The certificate should be a CA certificate. If the server
+   * supplies a certificate that is signed by this particular CA, then
+   * the TLS handshake succeeds. If the server certificate is not signed
+   * by this CA (or is invalid for other reasons, like expiry date), the
+   * connection is closed and 0 is returned.
+   *
+   * Note that no checking of the server certificate's commonName
+   * happens! If you pass in a (commercial) CA certificate, _any_
+   * certificate issued by that CA will be accepted, not just the ones
+   * with a specific hostname inside.
+   *
+   * Also make sure that the current time is correctly set, otherwise
+   * the server certificate will likely be considered expired or not yet
+   * valid even when it isn't.
+   */
+  bool enableTls(cid_t cid, const char *certname);
+
+  /**
+   * Save the given certificate to the module's flash or RAM
+   * (depending on to_flash). The name can be any string and should be
+   * passed to enableTls later. The buffer should contain the ca
+   * certificate in (binary) DER format. */
+  bool addCert(const char *certname, bool to_flash, const uint8_t *buf, uint16_t len);
+
+  /**
+   * Remove the certificate with the given name from either the module's
+   * flash or RAM (depending on where it is).
+   */
+  bool delCert(const char *certname)
+  {
+    return writeCommandCheckOk("AT+TCERTDEL=%s", certname);
+  }
+
+  /**
+   * Do an SNTP timesync to an NTP server.
+   * A one-shot sync is performed immediately and, if interval is
+   * non-zero, more syncs are performed every interval seconds.
+   *
+   * @param server    The address of an NTP server to use.
+   * @param timeout   The number of seconds to wait for the server's response.
+   * @param interval  The number of seconds before doing another time
+   *                  sync (or 0 for only a one-off timesync).
+   *
+   * @returns true when the time sync was succesful, false otherwise.
+   */
+  bool timeSync(const IPAddress&, uint8_t timeout = 10, uint16_t interval = 0);
+
+  /**
    * Setup a new TCP connection to the given ip and port.
    *
    * @returns the cid of the new connection if succesful, INVALID_CID

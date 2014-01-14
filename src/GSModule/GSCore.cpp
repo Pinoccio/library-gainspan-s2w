@@ -852,6 +852,16 @@ GSCore::GSResponse GSCore::processResponseLine(const uint8_t* buf, uint8_t len, 
     code = (GSResponse)(buf[0] - '0');
   }
 
+  if (code == GS_UNKNOWN_RESPONSE) {
+    // Also process the "OK" response, since even in non-verbose mode,
+    // sending a certificate (using <ESC>W) replies with "OK" instead of
+    // "0"...
+    if (len == 2 && buf[0] == 'O' && buf[1] == 'K') {
+      code = GS_SUCCESS;
+      args = buf + 2;
+    }
+  }
+
   if (code == GS_UNKNOWN_RESPONSE)
     return code;
 

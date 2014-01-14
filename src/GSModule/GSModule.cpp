@@ -70,3 +70,48 @@ bool GSModule::disconnect(cid_t cid)
     return false;
   return writeCommandCheckOk("AT+NCLOSE=%x", cid);
 }
+
+bool GSModule::timeSync(const IPAddress& server, uint8_t timeout, uint16_t interval)
+{
+  uint8_t buf[16];
+  snprintf((char*)buf, sizeof(buf), "%d.%d.%d.%d", server[0], server[1], server[2], server[3]);
+
+  // First, send the command without an interval, to force a sync now
+  if (!writeCommandCheckOk("AT+NTIMESYNC=1,%s,%d,0", buf, timeout))
+    return false;
+
+  if (interval) {
+    // Then, schedule periodic syncs if requested
+    if (!writeCommandCheckOk("AT+NTIMESYNC=1,%s,%d,1,%d", buf, timeout, interval))
+      return false;
+  }
+  return true;
+}
+
+
+bool GSModule::enableTls(cid_t cid, const char *certname)
+{
+  if (cid > MAX_CID)
+    return false;
+
+  if (writeCommandCheckOk("AT+SSLOPEN=%x,%s", cid, certname)) {
+    // TODO: Keep track of SSL status?
+    return true;
+  } else {
+    this->connections[cid].connected = false;
+    this->connections[cid].error = true;
+    return false;
+  }
+}
+
+bool GSModule::addCert(const char *certname, bool to_flash, const uint8_t *buf, uint16_t len) {
+  if (!writeCommandCheckOk("AT+TCERTADD=%s,0,%d,%d", certname, len, !to_flash))
+    return false;
+
+  const uint8_t escape[] = {0x1b, 'W'};
+  writeRaw(escape, sizeof(escape));
+  writeRaw(buf, len);
+  return readResponse() == GS_SUCCESS;
+}
+
+// vim: set sw=2 sts=2 expandtab:

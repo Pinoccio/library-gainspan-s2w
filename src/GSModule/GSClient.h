@@ -29,6 +29,11 @@ class GSClient : public Client {
     // Include other overloads of write
     using Print::write;
 
+    /****************************************************************
+     * Gainspan-specific stuff
+     ****************************************************************/
+    virtual bool enableTls(const char *certname);
+
   protected:
     GSModule &gs;
     GSModule::cid_t cid;
