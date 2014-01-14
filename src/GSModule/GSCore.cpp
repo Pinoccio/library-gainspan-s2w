@@ -629,7 +629,7 @@ GSCore::GSResponse GSCore::processIncoming(int c, cid_t *connect_cid)
         case 'F':
           // Failure response after sending data
           this->rx_state = GS_RX_RESPONSE;
-          res = GS_DATA_SUCCESS;
+          res = GS_DATA_FAILURE;
           break;
 
         case 'y':
