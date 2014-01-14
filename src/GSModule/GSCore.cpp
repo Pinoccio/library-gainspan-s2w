@@ -29,6 +29,27 @@
 #include "GSCore.h"
 #include "util.h"
 
+#if defined(GS_DUMP_BYTES) || defined(GS_DUMP_SPI)
+static void dump_byte(const char *prefix, int c, bool newline = true) {
+  if (c >= 0) {
+    SERIAL_PORT_MONITOR.print(prefix);
+    SERIAL_PORT_MONITOR.print("0x");
+    if (c < 0x10) SERIAL_PORT_MONITOR.print("0");
+    SERIAL_PORT_MONITOR.print(c, HEX);
+    if (isprint(c)) {
+      SERIAL_PORT_MONITOR.print(" (");
+      SERIAL_PORT_MONITOR.write(c);
+      SERIAL_PORT_MONITOR.print(")");
+    }
+    if (newline)
+      SERIAL_PORT_MONITOR.println();
+    // Needed to work around some buffer overflow problem in a part of
+    // the serial output.
+    SERIAL_PORT_MONITOR.flush();
+  }
+}
+#endif
+
 /*******************************************************
  * Methods for setting up the module
  *******************************************************/
@@ -174,6 +195,9 @@ size_t GSCore::readData(cid_t cid, uint8_t *buf, size_t size)
       if (c == -1)
         break;
       buf[read++] = c;
+      #ifdef GS_DUMP_BYTES
+      dump_byte("<< ", c);
+      #endif
       this->tail_frame.length--;
       if(--this->head_frame.length == 0) {
         this->rx_state = GS_RX_RESPONSE;
@@ -408,38 +432,45 @@ GSCore::GSResponse GSCore::readResponse(uint8_t *connect_id)
 }
 
 
-void GSCore::writeRaw(const uint8_t *buf, uint16_t len)
+uint8_t GSCore::transferSpi(uint8_t out)
 {
-  #ifdef GS_DUMP_BYTES
-  for (uint8_t i = 0; i < len; ++i) {
-    SERIAL_PORT_MONITOR.print(">> 0x");
-    if (buf[i] < 0x10) SERIAL_PORT_MONITOR.print("0");
-    SERIAL_PORT_MONITOR.print(buf[i], HEX);
-    if (isprint(buf[i])) {
-      SERIAL_PORT_MONITOR.print(" (");
-      SERIAL_PORT_MONITOR.write(buf[i]);
-      SERIAL_PORT_MONITOR.print(")");
-    }
-    SERIAL_PORT_MONITOR.println();
+  // Note that we need to toggle SS for every byte, otherwise the module
+  // will ignore subsequent bytes and return 0xff
+  digitalWrite(this->ss, LOW);
+  uint8_t in = SPI.transfer(out);
+  digitalWrite(this->ss, HIGH);
+  #ifdef GS_DUMP_SPI
+  if (in != SPI_SPECIAL_IDLE || out != SPI_SPECIAL_IDLE) {
+    dump_byte("SPI: >> ", out, false);
+    dump_byte(" << ", in);
   }
   #endif
+  return in;
+}
+
+void GSCore::writeRaw(const uint8_t *buf, uint16_t len)
+{
   if (this->serial) {
+    #ifdef GS_DUMP_BYTES
+    for (uint16_t i = 0; i < len; ++i)
+      dump_byte(">> ", buf[i]);
+    #endif
     this->serial->write(buf, len);
   } else if (this->ss) {
     while (len) {
-      digitalWrite(this->ss, LOW);
       if (this->spi_xoff) {
         // Module sent XOFF, so send IDLE bytes until it reports it has
         // buffer space again.
-        processIncomingAsyncOnly(processSpiSpecial(SPI.transfer(SPI_SPECIAL_IDLE)));
+        processIncomingAsyncOnly(processSpiSpecial(transferSpi(SPI_SPECIAL_IDLE)));
       } else {
-        processIncomingAsyncOnly(processSpiSpecial(SPI.transfer(*buf)));
+        #ifdef GS_DUMP_BYTES
+        dump_byte(">> ", *buf);
+        #endif
+        processIncomingAsyncOnly(processSpiSpecial(transferSpi(*buf)));
+        }
         buf++;
         len--;
       }
-      // Module wants SS deasserted after every byte, otherwise it'll
-      // ignore subsequent bytes and return 0xff
-      digitalWrite(this->ss, HIGH);
     }
   }
 }
@@ -451,7 +482,7 @@ int GSCore::readRaw()
     c = this->serial->read();
   } else if (this->ss != SPI_DISABLED) {
     digitalWrite(this->ss, LOW);
-    c = processSpiSpecial(SPI.transfer(SPI_SPECIAL_IDLE));
+    c = processSpiSpecial(transferSpi(SPI_SPECIAL_IDLE));
     digitalWrite(this->ss, HIGH);
   } else {
     #ifdef GS_LOG_ERRORS
@@ -459,19 +490,6 @@ int GSCore::readRaw()
     #endif
     return -1;
   }
-  #ifdef GS_DUMP_BYTES
-  if (c >= 0) {
-    SERIAL_PORT_MONITOR.print("<< 0x");
-    if (c < 0x10) SERIAL_PORT_MONITOR.print("0");
-    SERIAL_PORT_MONITOR.print(c, HEX);
-    if (isprint(c)) {
-      SERIAL_PORT_MONITOR.print(" (");
-      SERIAL_PORT_MONITOR.write(c);
-      SERIAL_PORT_MONITOR.print(")");
-    }
-    SERIAL_PORT_MONITOR.println();
-  }
-  #endif
   return c;
 }
 
@@ -487,17 +505,26 @@ int GSCore::processSpiSpecial(uint8_t c)
     this->spi_prev_was_esc = false;
     return c ^ SPI_ESC_XOR;
   }
-
   int res = -1;
   switch(c) {
     case SPI_SPECIAL_ALL_ONE:
+      // TODO: Handle these? Flag an error? Wait for SPI_SPECIAL_ACK?
+      #ifdef GS_LOG_ERRORS
+      SERIAL_PORT_MONITOR.println("SPI 0xff?");
+      #endif
+      break;
     case SPI_SPECIAL_ALL_ZERO:
-      // TODO: Handle these? Flag an error? Wait for SPI_SPECIAL_ESC?
+      // TODO: Handle these? Flag an error? Wait for SPI_SPECIAL_ACK?
+      #ifdef GS_LOG_ERRORS
+      SERIAL_PORT_MONITOR.println("SPI 0x00?");
+      #endif
+      break;
     case SPI_SPECIAL_ACK:
       // TODO: What does this one mean exactly?
       #ifdef GS_LOG_ERRORS
       SERIAL_PORT_MONITOR.println("SPI ACK received?");
       #endif
+      break;
     case SPI_SPECIAL_IDLE:
       break;
     case SPI_SPECIAL_XOFF:
@@ -539,6 +566,10 @@ GSCore::GSResponse GSCore::processIncoming(int c, cid_t *connect_cid)
 {
   if (c < 0)
     return GS_NO_RESPONSE;
+
+  #ifdef GS_DUMP_BYTES
+  dump_byte("<< ", c);
+  #endif
 
   GSResponse res = GS_NO_RESPONSE;
 
@@ -756,6 +787,9 @@ int GSCore::getData()
     // No data buffered, try reading from the module directly
     int c = readRaw();
     if (c >= 0) {
+      #ifdef GS_DUMP_BYTES
+      dump_byte("<< ", c);
+      #endif
       this->tail_frame.length--;
       if(--this->head_frame.length == 0)
         this->rx_state = GS_RX_RESPONSE;

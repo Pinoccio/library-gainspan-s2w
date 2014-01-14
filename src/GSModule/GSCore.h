@@ -43,6 +43,10 @@
 // Dump individual hex bytes
 //#define GS_DUMP_BYTES
 
+// Dump raw bytes sent/received for every SPI transfer (including byte
+// stuffing and escaping), except when an idle byte is both sent and
+// received.
+//#define GS_DUMP_SPI
 
 /**
  * This class allows talking to a Gainspan Serial2Wifi module. It's
@@ -339,6 +343,11 @@ protected:
    * SPI. Returns the original byte, or -1 when there is none.
    */
   int processSpiSpecial(uint8_t c);
+
+  /**
+   * Send and receive a single SPI byte.
+   */
+  uint8_t transferSpi(uint8_t c);
 
   /**
    * Processes an incoming byte read from the module.
