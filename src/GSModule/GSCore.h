@@ -345,6 +345,12 @@ protected:
   int processSpiSpecial(uint8_t c);
 
   /**
+   * Checks wether an SPI byte is special and should be escaped when
+   * sent.
+   */
+  bool isSpiSpecial(uint8_t c);
+
+  /**
    * Send and receive a single SPI byte.
    */
   uint8_t transferSpi(uint8_t c);

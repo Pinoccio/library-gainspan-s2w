@@ -466,7 +466,11 @@ void GSCore::writeRaw(const uint8_t *buf, uint16_t len)
         #ifdef GS_DUMP_BYTES
         dump_byte(">> ", *buf);
         #endif
-        processIncomingAsyncOnly(processSpiSpecial(transferSpi(*buf)));
+        if (isSpiSpecial(*buf)) {
+          processIncomingAsyncOnly(processSpiSpecial(transferSpi(SPI_SPECIAL_ESC)));
+          processIncomingAsyncOnly(processSpiSpecial(transferSpi(*buf ^ SPI_ESC_XOR)));
+        } else {
+          processIncomingAsyncOnly(processSpiSpecial(transferSpi(*buf)));
         }
         buf++;
         len--;
@@ -543,6 +547,21 @@ int GSCore::processSpiSpecial(uint8_t c)
   return res;
 }
 
+bool GSCore::isSpiSpecial(uint8_t c)
+{
+  switch(c) {
+    case SPI_SPECIAL_ALL_ONE:
+    case SPI_SPECIAL_ALL_ZERO:
+    case SPI_SPECIAL_ACK:
+    case SPI_SPECIAL_IDLE:
+    case SPI_SPECIAL_XOFF:
+    case SPI_SPECIAL_XON:
+    case SPI_SPECIAL_ESC:
+      return true;
+    default:
+      return false;
+  }
+}
 
 GSCore::GSResponse GSCore::processIncomingAsyncOnly(int c)
 {
