@@ -29,7 +29,7 @@
 #include "GSCore.h"
 #include "util.h"
 
-#if defined(GS_DUMP_BYTES) || defined(GS_DUMP_SPI)
+#if defined(GS_DUMP_BYTES) || defined(GS_DUMP_SPI) || defined(GS_LOG_ERRORS)
 static void dump_byte(const char *prefix, int c, bool newline = true) {
   if (c >= 0) {
     SERIAL_PORT_MONITOR.print(prefix);
@@ -92,7 +92,7 @@ bool GSCore::begin(uint8_t ss)
 
 bool GSCore::_begin()
 {
-  this->rx_state = GS_RX_RESPONSE;
+  this->rx_state = GS_RX_IDLE;
   this->rx_data_head = this->rx_data_tail = 0;
   this->tail_frame.length = 0;
   this->spi_prev_was_esc = false;
@@ -114,6 +114,10 @@ bool GSCore::_begin()
 
   // Enable bulk mode
   if (!writeCommandCheckOk("AT+BDATA=1"))
+    return false;
+
+  // Enable enhanced asynchronous messages
+  if (!writeCommandCheckOk("AT+ASYNCMSGFMT=1"))
     return false;
 
   memset(this->connections, 0, sizeof(connections));
@@ -200,7 +204,7 @@ size_t GSCore::readData(cid_t cid, uint8_t *buf, size_t size)
       #endif
       this->tail_frame.length--;
       if(--this->head_frame.length == 0) {
-        this->rx_state = GS_RX_RESPONSE;
+        this->rx_state = GS_RX_IDLE;
         break;
       }
     }
@@ -248,7 +252,7 @@ uint16_t GSCore::availableData(cid_t cid)
   // no data available. For this reason, if our buffer is empty, try to
   // read at least one byte from the module.
   if (this->rx_data_head == this->rx_data_tail)
-    processIncomingAsyncOnly(readRaw());
+    processIncoming(readRaw());
 
   uint16_t len = (this->rx_data_head - this->rx_data_tail) % sizeof(this->rx_data);
   if (len > this->tail_frame.length)
@@ -278,13 +282,8 @@ bool GSCore::writeData(cid_t cid, const uint8_t *buf, uint16_t len)
   SERIAL_PORT_MONITOR.print(len);
   SERIAL_PORT_MONITOR.println(" bytes");
   #endif
-  GSResponse res = readResponse();
-  #ifdef GS_LOG_ERRORS
-  if (res != GS_DATA_SUCCESS && res != GS_DATA_FAILURE)
-    SERIAL_PORT_MONITOR.println("Unexpected response to bulk data frame");
-  #endif
 
-  return (res == GS_DATA_SUCCESS);
+  return readDataResponse();
 }
 
 /*******************************************************
@@ -336,10 +335,11 @@ bool GSCore::writeCommandCheckOk(const char *fmt, ...)
   return (readResponse() == GS_SUCCESS);
 }
 
-GSCore::GSResponse GSCore::readResponse(uint8_t *buf, uint16_t* len, cid_t *connect_cid)
+GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid_t *connect_cid, bool keep_data)
 {
   uint16_t read = 0;
   uint16_t line_start = 0;
+  bool dropped_data = false;
   GSResponse res;
   while(true) {
     int c = readRaw();
@@ -348,22 +348,21 @@ GSCore::GSResponse GSCore::readResponse(uint8_t *buf, uint16_t* len, cid_t *conn
       continue;
     }
 
-    if (this->rx_state != GS_RX_RESPONSE || c == 0x1b || this->rx_async_len) {
-      // We're currently handling connection data, are about to get
-      // connection data, or are halfway through handling an async
-      // respons. Let bufferIncoming sort that out.
-      processIncomingAsyncOnly(c);
-    } else  if ((c == '\r' || c == '\n')) {
+    if (this->rx_state != GS_RX_IDLE || c == 0x1b) {
+      // We're currently handling connection or async data, or are about
+      // to. Let processIncoming sort that out.
+      processIncoming(c);
+    } else if ((c == '\r' || c == '\n')) {
       // This normalizes all sequences of line endings into a single
       // \r\n and strips leading \r\n sequences, because responses tend
       // to use a lot of extra \r\n (or \n or even \n\r :-S) sequences.
       // As a side effect, this removes empty lines from output, but
       // that's ok.
-      if ((read > 0 && buf[read - 1] == '\n') || read == 0)
+      if (read - line_start == 0)
         continue;
 
       res = processResponseLine(buf + line_start, read - line_start, connect_cid);
-      if (res == GS_UNKNOWN_RESPONSE) {
+      if (keep_data && !dropped_data && res == GS_UNKNOWN_RESPONSE) {
         // Unknown response, so it's probably actual data that the
         // caller will want to have. Leave it in the buffer, and
         // terminate it with \r\n.
@@ -371,9 +370,11 @@ GSCore::GSResponse GSCore::readResponse(uint8_t *buf, uint16_t* len, cid_t *conn
         if (read < *len) buf[read++] = '\n';
         line_start = read;
       } else {
-        // The response was known, so back it out of the buffer
+        // The response was known, or we're not interested in keeping
+        // extra data. Back it out of the buffer and continue with the
+        // next line or return.
         read = line_start;
-        if (res != GS_CON_SUCCESS && res != GS_ASYNC_HANDLED) {
+        if (res != GS_UNKNOWN_RESPONSE && res != GS_CON_SUCCESS) {
           // All other responses indicate the end of the reply
           *len = read;
           return res;
@@ -382,52 +383,71 @@ GSCore::GSResponse GSCore::readResponse(uint8_t *buf, uint16_t* len, cid_t *conn
     } else {
       if (read < *len) {
         buf[read++] = c;
-      } else {
-        // Ok, we were asked to store the reply, but the buffer wasn't
-        // big enough. We can't just discard the rest of the data,
-        // because then we have no buffer space to find out where the
-        // response ends. To fix this, we resort to using readResponse()
-        // for reading (and discarding) the rest of the response.
-        // However, there is a small chance that we're currently halfway
-        // through the last line of the response, so we copy the current
-        // line into this->rx_async (which is used by readResponse) to
-        // make this case work as well. If the line is already longer
-        // than the rx_async buffer, don't bother, responses don't get
-        // so long.
-        uint16_t line_len = (read - line_start);
-        if (line_len + 1 < sizeof(this->rx_async)) {
-          memcpy(this->rx_async, buf + line_start, line_len);
-          rx_async[line_len] = c;
-          this->rx_async_len = line_len + 1;
-          read = line_start;
-        }
+      } else if ((read - line_start) >= MAX_RESPONSE_SIZE ) {
+        // The buffer is full. However, the line is too long for a
+        // response, so there is no danger in just discarding the byte.
         #ifdef GS_LOG_ERRORS
-        SERIAL_PORT_MONITOR.println("Response buffer too small");
+        if (keep_data)
+          dump_byte("Response buffer too small, dropped byte: ", c);
         #endif
-        *len = read;
-        return readResponse();
+      } else {
+        // The buffer is full, but we can't just discard the byte: It
+        // might be part of the final response we're waiting for.
+        // Instead, drop the last byte of the previous line to make
+        // room, and move any data in the current line accordingly.
+        if (line_start > 0) {
+          #ifdef GS_LOG_ERRORS
+          dump_byte("Response buffer too small, removed byte: ", buf[line_start - 1]);
+          #endif
+          memmove(&buf[line_start - 1], &buf[line_start], (read - line_start));
+          line_start--;
+          buf[read] = c;
+        } else {
+          // line_start == 0 should only happen if len <
+          // MAX_RESPONSE_SIZE, but better be safe than sorry.
+          #ifdef GS_LOG_ERRORS
+          dump_byte("Response buffer tiny? Dropped byte: ", c);
+          #endif
+        }
+
+        // Once we threw away a byte of data, don't store any new ones
+        // (to make sure the returned data is cleanly truncated instead
+        // of having gaps).
+        dropped_data = true;
       }
     }
   }
 }
 
-GSCore::GSResponse GSCore::readResponse(uint8_t *connect_id)
+GSCore::GSResponse GSCore::readResponse(uint8_t *buf, uint16_t* len, cid_t *connect_cid) {
+  return readResponseInternal(buf, len, connect_cid, true);
+}
+
+GSCore::GSResponse GSCore::readResponse(cid_t *connect_cid)
+{
+  uint8_t buf[MAX_RESPONSE_SIZE];
+  uint16_t len = sizeof(buf);
+  return readResponseInternal(buf, &len, connect_cid, /* keep_data */ false);
+}
+
+bool GSCore::readDataResponse()
 {
   while(true) {
-    GSResponse res = processIncoming(readRaw(), connect_id);
-    switch (res) {
-      case GS_NO_RESPONSE:
-      case GS_UNKNOWN_RESPONSE:
-      case GS_ASYNC_HANDLED:
-      case GS_CON_SUCCESS:
-        // This is data the caller didn't ask for, so start a new
-        // line
-        break;
-      default:
-        // All other responses terminate the reply
-        return res;
+    int c = readRaw();
+    if (c == -1) {
+      // TODO: timeout?
+      continue;
     }
-    // TODO: timeout?
+
+    if (this->rx_state == GS_RX_ESC && c == 'O') {
+      this->rx_state = GS_RX_IDLE;
+      return true;
+    } else if (this->rx_state == GS_RX_ESC && c == 'F') {
+      this->rx_state = GS_RX_IDLE;
+      return true;
+    } else {
+      processIncoming(c);
+    }
   }
 }
 
@@ -461,16 +481,16 @@ void GSCore::writeRaw(const uint8_t *buf, uint16_t len)
       if (this->spi_xoff) {
         // Module sent XOFF, so send IDLE bytes until it reports it has
         // buffer space again.
-        processIncomingAsyncOnly(processSpiSpecial(transferSpi(SPI_SPECIAL_IDLE)));
+        processIncoming(processSpiSpecial(transferSpi(SPI_SPECIAL_IDLE)));
       } else {
         #ifdef GS_DUMP_BYTES
         dump_byte(">> ", *buf);
         #endif
         if (isSpiSpecial(*buf)) {
-          processIncomingAsyncOnly(processSpiSpecial(transferSpi(SPI_SPECIAL_ESC)));
-          processIncomingAsyncOnly(processSpiSpecial(transferSpi(*buf ^ SPI_ESC_XOR)));
+          processIncoming(processSpiSpecial(transferSpi(SPI_SPECIAL_ESC)));
+          processIncoming(processSpiSpecial(transferSpi(*buf ^ SPI_ESC_XOR)));
         } else {
-          processIncomingAsyncOnly(processSpiSpecial(transferSpi(*buf)));
+          processIncoming(processSpiSpecial(transferSpi(*buf)));
         }
         buf++;
         len--;
@@ -563,73 +583,48 @@ bool GSCore::isSpiSpecial(uint8_t c)
   }
 }
 
-GSCore::GSResponse GSCore::processIncomingAsyncOnly(int c)
-{
-  GSResponse res = processIncoming(c);
-
-  #ifdef GS_LOG_ERRORS
-  if (res != GS_ASYNC_HANDLED && res != GS_NO_RESPONSE) {
-    if (res == GS_UNKNOWN_RESPONSE) {
-      SERIAL_PORT_MONITOR.println("Unknown response received");
-    } else {
-      SERIAL_PORT_MONITOR.print("Unexpected response received: ");
-      SERIAL_PORT_MONITOR.println(res);
-    }
-  }
-  #endif
-
-  return res;
-}
-
-GSCore::GSResponse GSCore::processIncoming(int c, cid_t *connect_cid)
+void GSCore::processIncoming(int c)
 {
   if (c < 0)
-    return GS_NO_RESPONSE;
+    return;
 
   #ifdef GS_DUMP_BYTES
   dump_byte("<< ", c);
   #endif
 
-  GSResponse res = GS_NO_RESPONSE;
-
   switch(this->rx_state) {
-    case GS_RX_RESPONSE:
+    case GS_RX_IDLE:
       if (c == 0x1b) {
         // Escape character, incoming data
         this->rx_state = GS_RX_ESC;
-      } else if (c == '\n' || c == '\r') {
-        // End of response line, process it
-        if (this->rx_async_len > 0)
-          res = processResponseLine(this->rx_async, this->rx_async_len, connect_cid);
-        this->rx_async_len = 0;
       } else {
-        if (this->rx_async_len < sizeof(this->rx_async))
-          this->rx_async[this->rx_async_len++] = c;
         #ifdef GS_LOG_ERRORS
-        else
-          SERIAL_PORT_MONITOR.println("rx_async is full");
+          // Don't log \r\n, since the synchronous response parsing
+          // often leaves a \n behind
+          if (c != '\n' && c != '\r')
+            dump_byte("Discarding non-escaped byte, no synchronous response expected: ", c);
         #endif
       }
       break;
 
     case GS_RX_ESC:
+      // Note: <Esc>O and <Esc>F are handled in readDataResponse, since
+      // they should never be received asynchronously
       switch (c) {
         case 'Z':
           // Incoming TCP client/server or UDP client data
           // <Esc>Z<CID><Data Length xxxx 4 ascii char><data>
           this->rx_state = GS_RX_ESC_Z;
+          this->rx_async_left = 5;
+          this->rx_async_len = 0;
           break;
 
-        case 'O':
-          // OK response after sending data
-          this->rx_state = GS_RX_RESPONSE;
-          res = GS_DATA_SUCCESS;
-          break;
-
-        case 'F':
-          // Failure response after sending data
-          this->rx_state = GS_RX_RESPONSE;
-          res = GS_DATA_FAILURE;
+        case 'A':
+          // Asynchronous response
+          // <ESC>A<Subtype><length 2 ascii char><data>
+          this->rx_state = GS_RX_ESC_A;
+          this->rx_async_left = 3;
+          this->rx_async_len = 0;
           break;
 
         case 'y':
@@ -638,11 +633,11 @@ GSCore::GSResponse GSCore::processIncoming(int c, cid_t *connect_cid)
           // TODO
           // fallthrough for now
         default:
-          // Unknown escape sequence? Revert to GS_RX_RESPONSE and hope for
+          // Unknown escape sequence? Revert to GS_RX_IDLE and hope for
           // the best...
-          this->rx_state = GS_RX_RESPONSE;
+          this->rx_state = GS_RX_IDLE;
           #ifdef GS_LOG_ERRORS
-            SERIAL_PORT_MONITOR.print("Unknown escape character: ");
+            SERIAL_PORT_MONITOR.print("Unknown escape sequence: <Esc>");
             SERIAL_PORT_MONITOR.write(c);
             SERIAL_PORT_MONITOR.println();
           #endif
@@ -650,68 +645,85 @@ GSCore::GSResponse GSCore::processIncoming(int c, cid_t *connect_cid)
       break;
 
     case GS_RX_ESC_Z:
-      this->head_frame.cid = parseCid(c);
-      if (this->head_frame.cid != INVALID_CID) {
-        this->rx_state = GS_RX_ESC_Z_LEN0;
-        this->head_frame.length = 0;
+    case GS_RX_ESC_A:
+    case GS_RX_ASYNC:
+      if (this->rx_async_len < sizeof(this->rx_async)) {
+        this->rx_async[this->rx_async_len++] = c;
       } else {
-        // Invalid escape sequence? Revert to GS_RX_RESPONSE and hope
-        // for the best...
-        this->rx_state = GS_RX_RESPONSE;
         #ifdef GS_LOG_ERRORS
-          SERIAL_PORT_MONITOR.print("Invalid cid received: <ESC>Z");
-          SERIAL_PORT_MONITOR.write(c);
-          SERIAL_PORT_MONITOR.println();
+          SERIAL_PORT_MONITOR.println("rx_async is full");
         #endif
       }
-      break;
 
-    case GS_RX_ESC_Z_LEN0:
-    case GS_RX_ESC_Z_LEN1:
-    case GS_RX_ESC_Z_LEN2:
-    case GS_RX_ESC_Z_LEN3:
-      // Parse the four-digit data length
-      if (c < '0' || c > '9') {
-        // Invalid escape sequence? Revert to GS_RX_RESPONSE and hope
-        // for the best...
-        this->rx_state = GS_RX_RESPONSE;
-        #ifdef GS_LOG_ERRORS
-          SERIAL_PORT_MONITOR.print("Invalid length byte in <ESC>Z sequence received: ");
-          SERIAL_PORT_MONITOR.write(c);
-          SERIAL_PORT_MONITOR.println();
-        #endif
-      }
-      this->head_frame.length *= 10;
-      this->head_frame.length += (c - '0');
+      if (--this->rx_async_left == 0) {
+        // Finished reading the header or body, find out out what to do with it
+        switch(this->rx_state) {
+          case GS_RX_ESC_Z:
+            // <CID><Data Length xxxx 4 ascii char><data>
+            if (parseNumber(&this->head_frame.cid, this->rx_async, 1, 16) &&
+                parseNumber(&this->head_frame.length, this->rx_async + 1, 4, 10)) {
+              #ifdef GS_DUMP_LINES
+              SERIAL_PORT_MONITOR.print("Read bulk data frame for cid ");
+              SERIAL_PORT_MONITOR.print(this->head_frame.cid);
+              SERIAL_PORT_MONITOR.print(" containing ");
+              SERIAL_PORT_MONITOR.print(this->head_frame.length);
+              SERIAL_PORT_MONITOR.println(" bytes");
+              #endif
+              // Store the frame header and prepare to read data
+              bufferFrameHeader(&this->head_frame);
+              this->rx_state = GS_RX_BULK;
+            } else {
+              #ifdef GS_LOG_ERRORS
+                SERIAL_PORT_MONITOR.print("Invalid escape sequence: <ESC>Z");
+                SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
+                SERIAL_PORT_MONITOR.println();
+              #endif
+              // Revert to GS_RX_IDLE and hope for the best...
+              this->rx_state = GS_RX_IDLE;
+            }
+            break;
 
-      static_assert( (int)GS_RX_ESC_Z_LEN0 + 1 == (int)GS_RX_ESC_Z_LEN1, "GS_RX_ESC_Z_LENx values not consecutive?");
-      static_assert( (int)GS_RX_ESC_Z_LEN1 + 1 == (int)GS_RX_ESC_Z_LEN2, "GS_RX_ESC_Z_LENx values not consecutive?");
-      static_assert( (int)GS_RX_ESC_Z_LEN2 + 1 == (int)GS_RX_ESC_Z_LEN3, "GS_RX_ESC_Z_LENx values not consecutive?");
+          case GS_RX_ESC_A:
+            // <Subtype><length 2 ascii char><data>
+            if (parseNumber(&this->rx_async_subtype, this->rx_async, 1, 16) &&
+                parseNumber(&this->rx_async_left, this->rx_async + 1, 2, 10)) {
+              this->rx_state = GS_RX_ASYNC;
+              this->rx_async_len = 0;
+            } else {
+              #ifdef GS_LOG_ERRORS
+                SERIAL_PORT_MONITOR.print("Invalid escape sequence: <ESC>A");
+                SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
+                SERIAL_PORT_MONITOR.println();
+              #endif
+              // Revert to GS_RX_IDLE and hope for the best...
+              this->rx_state = GS_RX_IDLE;
+            }
+            break;
 
-      if (this->rx_state != GS_RX_ESC_Z_LEN3) {
-        this->rx_state = (RXState)((int)this->rx_state + 1);
-      } else {
-        #ifdef GS_DUMP_LINES
-        SERIAL_PORT_MONITOR.print("Read bulk data frame for cid ");
-        SERIAL_PORT_MONITOR.print(this->head_frame.cid);
-        SERIAL_PORT_MONITOR.print(" containing ");
-        SERIAL_PORT_MONITOR.print(this->head_frame.length);
-        SERIAL_PORT_MONITOR.println(" bytes");
-        #endif
-        // Read escape sequence, so store the frame header and prepare
-        // to read data
-        bufferFrameHeader(&this->head_frame);
-        this->rx_state = GS_RX_BULK;
+          case GS_RX_ASYNC:
+            this->rx_state = GS_RX_IDLE;
+            if (!processAsync()) {
+              #ifdef GS_LOG_ERRORS
+                SERIAL_PORT_MONITOR.print("Unknown async reponse: <ESC>A");
+                SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
+                SERIAL_PORT_MONITOR.println();
+              #endif
+            }
+            break;
+
+          // keep the compiler happy
+          default:
+            break;
+        }
       }
       break;
 
     case GS_RX_BULK:
       bufferIncomingData(c);
       if(--this->head_frame.length == 0)
-        this->rx_state = GS_RX_RESPONSE;
+        this->rx_state = GS_RX_IDLE;
       break;
   }
-  return res;
 }
 
 void GSCore::bufferIncomingData(uint8_t c)
@@ -788,7 +800,7 @@ bool GSCore::getFrameHeader(cid_t cid)
       // Don't block
       if (c < 0)
         return false;
-      processIncomingAsyncOnly(c);
+      processIncoming(c);
     }
   }
   return true;
@@ -811,7 +823,7 @@ int GSCore::getData()
       #endif
       this->tail_frame.length--;
       if(--this->head_frame.length == 0)
-        this->rx_state = GS_RX_RESPONSE;
+        this->rx_state = GS_RX_IDLE;
     }
     return c;
   }
@@ -834,7 +846,15 @@ GSCore::GSResponse GSCore::processResponseLine(const uint8_t* buf, uint8_t len, 
 {
   const uint8_t *args;
   GSResponse code = GS_UNKNOWN_RESPONSE;
-  cid_t cid;
+
+  // This function parses a response line and has to decide wether the
+  // line contains a reponse code (with special meaning) or is just a
+  // line of data. There is no perfect way to do this, consider a reply
+  // like "2.5.1" indicate the firmware version. If you're not careful,
+  // that looks like a "2" response with "5.1" as arguments". For this
+  // reason, we're very conservative with matching a response: If
+  // anything is different from what we expect, return
+  // GS_UNKNOWN_RESPONSE assuming that it is just arbitrary data.
 
   #ifdef GS_DUMP_LINES
   SERIAL_PORT_MONITOR.print("< ");
@@ -844,59 +864,179 @@ GSCore::GSResponse GSCore::processResponseLine(const uint8_t* buf, uint8_t len, 
 
   // In non-verbose mode, command responses are an (string containing a)
   // number from "0" to "18"
+  static_assert(GS_RESPONSE_MAX == 18, "processResponseLine cannot parse all responses");
   if (len >= 2 && buf[0] == '1' && buf[1] >= '0' && buf[1] <= '8') {
     args = buf + 2;
     code = (GSResponse)(10 + buf[1] - '0');
   } else if (len >= 1 && buf[0] >= '0' && buf[0] <= '9') {
     args = buf + 1;
     code = (GSResponse)(buf[0] - '0');
-  }
-
-  if (code == GS_UNKNOWN_RESPONSE) {
+  } else if (len == 2 && buf[0] == 'O' && buf[1] == 'K') {
     // Also process the "OK" response, since even in non-verbose mode,
-    // sending a certificate (using <ESC>W) replies with "OK" instead of
-    // "0"...
-    if (len == 2 && buf[0] == 'O' && buf[1] == 'K') {
-      code = GS_SUCCESS;
-      args = buf + 2;
-    }
+    // sending a certificate (using <ESC>W) replies with "OK" instead
+    // of "0"...
+    args = buf + 2;
+    code = GS_SUCCESS;
+  } else {
+    return GS_UNKNOWN_RESPONSE;
   }
-
-  if (code == GS_UNKNOWN_RESPONSE)
-    return code;
 
   uint8_t arg_len = buf + len - args;
+
+  // After the digits, there should either be a space or nothing,
+  // anything else indicates it is not a proper reply
+  if (arg_len != 0 && args[0] != ' ')
+    return GS_UNKNOWN_RESPONSE;
+
   switch (code) {
-    case GS_CON_SUCCESS:
-      if (arg_len < 2 || args[0] != ' ')
+    // These are replies without arguments
+    case GS_SUCCESS:
+    case GS_FAILURE:
+    case GS_EINVAL:
+    case GS_ENOCID:
+    case GS_EBADCID:
+    case GS_ENOTSUP:
+    case GS_LINK_LOST:
+    case GS_ENOIP:
+      // No arguments
+      if (arg_len != 0)
         return GS_UNKNOWN_RESPONSE;
-      if (arg_len == 2) {
-        // CONNECT <CID>
-        cid_t cid = parseCid(args[1]);
 
-        if (cid == INVALID_CID)
-          return GS_UNKNOWN_RESPONSE;
+      return code;
 
-        if (!connect_cid) // got CONNECT while not expecting it? -> unknown
-          return GS_UNKNOWN_RESPONSE;
+    // This is a reply to a connect command with an argument. Only
+    // consider it a valid reply when we're expecting it.
+    case GS_CON_SUCCESS:
+      // The Network Connection Manager set up its connection
+      // CONNECT <CID>
 
-        *connect_cid = cid;
-        return code;
-      } else if (arg_len > 2 && args[0] == ' ') {
-        // CONNECT <server CID> <new CID> <ip> <port>,
-        // TODO
-        return GS_ASYNC_HANDLED;
-      }
+      // 2 bytes of arguments
+      if (arg_len != 2)
+        return GS_UNKNOWN_RESPONSE;
+
+      // No CONNECT reply expected?
+      if (!connect_cid)
+        return GS_UNKNOWN_RESPONSE;
+
+      if (!parseNumber(connect_cid, args + 1, 1, 16))
+        return GS_UNKNOWN_RESPONSE;
+
+      return code;
+
+    #ifdef GS_LOG_ERRORS
+    // These are asynchronous responses and with AT+ASYNCMSGFMT=1, we
+    // shouldn't be receiving them here...
+    case GS_DISASSO_EVT:
+    case GS_STBY_TMR_EVT:
+    case GS_STBY_ALM_EVT:
+    case GS_DPSLEEP_EVT:
+    case GS_BOOT_UNEXPEC:
+    case GS_BOOT_INTERNAL:
+    case GS_BOOT_EXTERNAL:
+    case GS_NWCONN_SUCCESS:
+      if (arg_len > 0)
+        return GS_UNKNOWN_RESPONSE;
+      // fallthrough //
     case GS_SOCK_FAIL:
     case GS_ECIDCLOSE:
-      if (arg_len != 2 || args[0] != ' ')
+      if (arg_len > 2)
         return GS_UNKNOWN_RESPONSE;
+        SERIAL_PORT_MONITOR.print("Received asynchronous response synchronously: ");
+        SERIAL_PORT_MONITOR.write(buf, len);
+        SERIAL_PORT_MONITOR.println();
+      return GS_UNKNOWN_RESPONSE;
+    #endif
 
-      cid = parseCid(args[1]);
-      if (cid == INVALID_CID)
-        return GS_UNKNOWN_RESPONSE;
+    // Make the compiler happy
+    default:
+      return GS_UNKNOWN_RESPONSE;
+  }
+}
 
-      if (code == GS_SOCK_FAIL) {
+enum GSAsync {
+  // These are asynchronous responses sent by the module. With
+  // AT+ASYNCMSGFMT=1, the (ascii-hex equivalents of the) values of this
+  // enum are sent as the "subtype" in <ESC>A responses.
+  GS_ASYNC_SOCK_FAIL = 0x0, // "\r\nERROR: SOCKET FAILURE <CID>\r\n"
+  GS_ASYNC_CON_SUCCESS = 0x1, // "\r\nCONNECT <CID>\r\n\r\nOK\r\n”
+                            // or "\r\nCONNECT <server CID> <new CID> <ip> <port>\r\n"
+  GS_ASYNC_ECIDCLOSE = 0x2, // "\r\nDISCONNECT <CID>\r\n"
+  GS_ASYNC_DISASSO_EVT = 0x3, // “\r\n\r\nDisassociation Event\r\n\r\n”
+  GS_ASYNC_STBY_TMR_EVT = 0x4, // "\r\nOut of StandBy-Timer\r\n"
+  GS_ASYNC_STBY_ALM_EVT = 0x5, // "\r\n\n\rOut of StandBy-Alarm\r\n\r\n"
+  GS_ASYNC_DPSLEEP_EVT = 0x6, // "\r\n\r\nOut of Deep Sleep\r\n\r\n\r\nOK\r\n"
+  GS_ASYNC_BOOT_UNEXPEC = 0x7, // "\r\n\r\nUnExpected Warm Boot(Possibly Low Battery)\r\n\r\n"
+  GS_ASYNC_ENOIP = 0x8, // "\r\nERROR: IP CONFIG FAIL\r\n"
+  GS_ASYNC_BOOT_INTERNAL = 0x9, // "\r\nSerial2WiFi APP\r\n"
+  GS_ASYNC_BOOT_EXTERNAL = 0xa, // "\r\nSerial2WiFi APP-Ext.PA\r\n"
+  GS_ASYNC_FAILURE = 0xb, // "\r\nERROR\r\n"
+  GS_ASYNC_NWCONN_SUCCESS = 0xc, // "\r\nNWCONN-SUCCESS\r\n"
+
+  GS_ASYNC_MAX = GS_ASYNC_NWCONN_SUCCESS,
+};
+
+
+bool GSCore::processAsync()
+{
+  cid_t cid;
+  if (this->rx_async_subtype > GS_ASYNC_MAX)
+    return false;
+
+  if (this->rx_async_len < 1)
+    return false;
+
+  // A asynchronous response looks like:
+  // <ESC>A<subtype><length><data>
+  // When in verbose mode, <data> is a string with the response. In
+  // non-verbose mode, <data> is the subtype followed by any
+  // space-separated arguments (note that with AT+ASYNCMSGFMT=0,
+  // asynchronous replies use the response code from GSResponse
+  // instead...). In any case, the subtype in <data> should be the
+  // same as the first one, so verify that here.
+  uint8_t subtype;
+  if (!parseNumber(&subtype, this->rx_async, 1, 16))
+    return false;
+
+  if (subtype != this->rx_async_subtype)
+    return false;
+
+  // "arguments" to the response
+  uint8_t arg_len = this->rx_async_len - 1;
+  uint8_t *args = this->rx_async + 1;
+
+  // After the digit, there should either be a space or nothing,
+  // anything else indicates it is not a proper reply
+  if (arg_len != 0 && args[0] != ' ')
+    return false;
+
+  switch(this->rx_async_subtype) {
+    case GS_ASYNC_CON_SUCCESS:
+      if (arg_len < 2)
+        return false;
+
+      if (arg_len == 2) {
+        // The Network Connection Manager set up its connection
+        // CONNECT <CID>
+        if (!parseNumber(&cid, &args[1], 1, 16))
+          return false;
+
+        // TODO
+        return false;
+      } else {
+        // Incoming connection on a TCP server
+        // CONNECT <server CID> <new CID> <ip> <port>,
+        // TODO
+        return false;
+      }
+    case GS_ASYNC_SOCK_FAIL:
+    case GS_ASYNC_ECIDCLOSE:
+      if (arg_len != 2)
+        return false;
+
+      if (!parseNumber(&cid, &args[1], 1, 16))
+        return false;
+
+      if (this->rx_async_subtype == GS_SOCK_FAIL) {
         // ERROR: SOCKET: FAILURE <CID>
         // Documentation is unclear, but experimentation shows that when
         // this happens, some data might have been lost and the
@@ -907,32 +1047,30 @@ GSCore::GSResponse GSCore::processResponseLine(const uint8_t* buf, uint8_t len, 
         #endif
         this->connections[cid].error = true;
         this->connections[cid].connected = false;
-        return GS_ASYNC_HANDLED;
+        return true;
       } else { // code == GS_ECIDCLOSE
         // DISCONNECT <CID>
         this->connections[cid].connected = false;
-        return GS_ASYNC_HANDLED;
+        return true;
       }
+
     default:
       // All others do not have arguments
       if (arg_len > 0)
-        return GS_UNKNOWN_RESPONSE;
+        return false;
 
-      switch (code) {
-        case GS_SUCCESS:
+      switch (this->rx_async_subtype) {
         case GS_FAILURE:
-        case GS_EINVAL:
-        case GS_ENOCID:
-        case GS_EBADCID:
-        case GS_ENOTSUP:
-        case GS_LINK_LOST:
-          // These terminate a reply, so no further action needed.
-          return code;
+          // Means the Network Connection Manager has used all it's
+          // retries and is giving up on setting up a L4 (TCP/UDP)
+          // connection (until the next (re)association). For now, just
+          // ignore.
+          return false;
 
         case GS_DISASSO_EVT:
           // TODO: This means the wifi association has broken. Update our
           // state.
-          return GS_ASYNC_HANDLED;
+          return false;
 
         case GS_STBY_TMR_EVT:
         case GS_STBY_ALM_EVT:
@@ -940,7 +1078,7 @@ GSCore::GSResponse GSCore::processResponseLine(const uint8_t* buf, uint8_t len, 
           // TODO: These are given after the wifi module is told to go
           // into standby. How to handle these? Perhaps just print some
           // debug info for now and then ignore them?
-          return GS_ASYNC_HANDLED;
+          return false;
 
         case GS_BOOT_UNEXPEC:
         case GS_BOOT_INTERNAL:
@@ -949,39 +1087,72 @@ GSCore::GSResponse GSCore::processResponseLine(const uint8_t* buf, uint8_t len, 
           // TODO: Reset our state to match the hardware. Also make sure
           // to stop waiting for a reply to a command, since it will never
           // come.
-          return GS_ASYNC_HANDLED;
+          return false;
 
         case GS_NWCONN_SUCCESS:
-          // TODO: When does this occur?
-          return GS_ASYNC_HANDLED; // ?
+          // This means that the Network Connection Manager has
+          // succesfully associated.
+          // TODO
+          return false;
 
         case GS_ENOIP:
           // ERROR: IP CONFIG FAIL
-          // Sent asynchronously when the DHCP release fails, but also
-          // as a reply to AT+NDHCP=1 or AT+WA=. Afterwards, the
-          // hardware loses its address and does not retry DHCP again.
-          // TODO: Handle the asynchronous case as well.
-          return code;
+          // Sent the DHCP renew, or DHCP lease initiated by the Network
+          // Connection Manager fails.
+          // Afterwards, the hardware loses its address and does not
+          // retry DHCP again.
+          // TODO
+          return false;
 
         default:
           // This should never happen, but the compiler gives a warning if
           // we don't handle _all_ enumeration values...
-          return GS_UNKNOWN_RESPONSE;
+          return false;
       }
+
   }
 }
 
 /*******************************************************
  * Static helper methods
  *******************************************************/
-
-GSCore::cid_t GSCore::parseCid(uint8_t c)
+bool GSCore::parseNumber(uint8_t *out, const uint8_t *buf, uint8_t len, uint8_t base)
 {
-  if (c >= '0' && c <= '9')
-    return (c - '0');
-  if (c >= 'a' && c <= 'f')
-    return (c - 'a');
-  return INVALID_CID;
+  uint16_t tmp;
+  if (!parseNumber(&tmp, buf, len, base))
+    return false;
+
+  if (tmp > max_for_type(__typeof__(*out)))
+    return false;
+
+  *out = tmp;
+  return true;
+}
+
+bool GSCore::parseNumber(uint16_t *out, const uint8_t *buf, uint8_t len, uint8_t base)
+{
+  if (base < 2 || base > 36)
+    return false;
+
+  uint16_t result = 0;
+  while (len--) {
+    if (result > max_for_type(__typeof__(*out)) / 10)
+      return false;
+
+    result *= base;
+    if (*buf >= '0' && *buf <= '9')
+      result += (*buf - '0');
+    else if (*buf >= 'a' && *buf <= 'z')
+      result += (*buf - 'a');
+    else if (*buf >= 'A' && *buf <= 'Z')
+      result += (*buf - 'A');
+    else
+      return false;
+    buf++;
+  }
+  *out = result;
+
+  return true;
 }
 
 // vim: set sw=2 sts=2 expandtab:

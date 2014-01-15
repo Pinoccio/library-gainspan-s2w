@@ -30,10 +30,6 @@
 #include <stdint.h>
 #include <Stream.h>
 
-// TODO: Decide on buffer sizes needed
-#define BUF_ASYNC_SIZE 128
-#define BUF_DATA_SIZE 128
-
 // Output debugging info on error conditions
 #define GS_LOG_ERRORS
 
@@ -220,7 +216,6 @@ public:
     GS_EBADCID = 5, // "\r\nERROR: INVALID CID\r\n"
     GS_ENOTSUP = 6, //"\r\nERROR: NOT SUPPORTED\r\n"
     GS_CON_SUCCESS = 7, // "\r\nCONNECT <CID>\r\n\r\nOK\r\n”
-                        // or async "\r\nCONNECT <server CID> <new CID> <ip> <port>\r\n"
     GS_ECIDCLOSE = 8, // "\r\nDISCONNECT <CID>\r\n"
     GS_LINK_LOST = 9, // "\r\nDISASSOCIATED\r\n"
     GS_DISASSO_EVT = 10, // “\r\n\r\nDisassociation Event\r\n\r\n”
@@ -233,6 +228,8 @@ public:
     GS_BOOT_EXTERNAL = 17, // "\r\nSerial2WiFi APP-Ext.PA\r\n"
     GS_NWCONN_SUCCESS = 18, // "\r\nNWCONN-SUCCESS\r\n"
 
+    GS_RESPONSE_MAX = GS_NWCONN_SUCCESS,
+
     // These are reponse sent in reply to data escape sequences. Their
     // values have no significant meaning
     GS_DATA_SUCCESS, // "<ESC>O"
@@ -241,7 +238,7 @@ public:
     // These codes are never emitted by the hardware, but used in the
     // code to comunicate between different parts of the code.
     GS_NO_RESPONSE,
-    GS_ASYNC_HANDLED,
+    GS_HANDLED_ASYNC,
     GS_UNKNOWN_RESPONSE,
   };
 
@@ -290,7 +287,17 @@ public:
    *                       handled and *connect_cid get set to the
    *                       numerical cid sent by the module.
    */
-  GSResponse readResponse(cid_t *connect_id = NULL);
+  GSResponse readResponse(cid_t *connect_cid = NULL);
+
+
+  /**
+   * Read a single data response (e.g. <Esc>O or <Esc>F in response to a
+   * data transmission escape sequence).
+   *
+   * @returns true when <Esc>O (OK) is received, false when <Esc>F
+   * (FAILURE) is received or no reponse is received within a timeout.
+   */
+  bool readDataResponse();
 
   /**
    * Write a raw sequence of bytes.
@@ -314,18 +321,17 @@ public:
 protected:
   enum RXState {
     /** Default state: expecting (more of) an async response */
-    GS_RX_RESPONSE,
+    GS_RX_IDLE,
     /** Read an escape char, waiting for the type */
     GS_RX_ESC,
-    /** Read an <esc>Z escape code, waiting for the rest of the sequence */
+    /** Read an <esc>Z escape code, reading the rest of the sequence */
     GS_RX_ESC_Z,
-    /** Read <esc>Z<cid>, waiting for byte 0 of the length */
-    GS_RX_ESC_Z_LEN0,
-    GS_RX_ESC_Z_LEN1,
-    GS_RX_ESC_Z_LEN2,
-    GS_RX_ESC_Z_LEN3,
     /** Reading bulk data */
     GS_RX_BULK,
+    /** Read an <esc>A escape code, waiting for the rest of the sequence */
+    GS_RX_ESC_A,
+    /** Reading async data */
+    GS_RX_ASYNC,
   };
 
   struct RXFrame {
@@ -359,7 +365,7 @@ protected:
    * Processes an incoming byte read from the module.
    *
    * @return When this byte completes a response, its type is returned
-   * (except for async responses, which return GS_ASYNC_HANDLED). When
+   * (except for async responses, which return GS_HANDLED_ASYNC). When
    * this byte does not complete a response, GS_NO_RESPONSE is returned.
    *
    * @param c              The byte to process. If it is -1, does
@@ -368,13 +374,7 @@ protected:
    *                       handled and *connect_cid get set to the
    *                       numerical cid sent by the module.
    */
-  GSResponse processIncoming(int c, cid_t *connect_id = NULL);
-
-  /**
-   * Identical to processIncoming, except that (when GS_LOG_ERRORS is
-   * defined), it shows an error when a non-async response is received.
-   */
-  GSResponse processIncomingAsyncOnly(int c);
+  void processIncoming(int c);
 
   /**
    * Put an incoming data byte into rx_data.
@@ -419,10 +419,22 @@ protected:
   void dropData(uint8_t num_bytes);
 
   /**
+   * Internal version of readResponse.
+   *
+   * @param keep_data   When true, any non-response data read is put
+   *                    into the buffer. When false, no meaningful data
+   *                    is retuned in the buffer, but the buffer is only
+   *                    used as temporary storage (and should be at
+   *                    least MAX_RESPONSE_SIZE long).
+   * @see readRespone for the other parameters.
+   */
+  GSResponse readResponseInternal(uint8_t *buf, uint16_t *len, cid_t *connect_cid, bool keep_data);
+
+  /**
    * Look at the given response line and find out what kind of reponse
    * it is.
    *  - If the response is an asynchronous event, it is handled and
-   *    GS_ASYNC_HANDLED is returned.
+   *    GS_HANDLED_ASYNC is returned.
    *  - If the response does not look like a known response,
    *    GS_UNKNOWN_RESPONSE is returned.
    *  - Otherwise, the corresponding constant for the response returned.
@@ -433,21 +445,61 @@ protected:
    */
   GSResponse processResponseLine(const uint8_t *buf, uint8_t len, cid_t *connect_cid);
 
+  /**
+   * Process an asynchronous response.
+   *
+   * The response is taken from this->rx_async and should be the body of
+   * the response (everything after <Esc>A<subtype><length>).
+   *
+   * @returns true when a valid asynchronous response was found and
+   *          handled, false otherwise.
+   */
+  bool processAsync();
+
+
 /*******************************************************
  * Static helper methods
  *******************************************************/
 
   /**
-   * Parses a CID from a character ('0' to '9' and 'a' to 'f') to the
-   * equivalent integer (0 to 15).
+   * Parses a number of exactly the given length from a string in the
+   * given base.
    *
-   * When the character given is not valid, returns INVALID_CID.
+   * @param out      The parsed number is stored here. This value could
+   *                 be modified even when false is returned.
+   * @param buf      The string to parse. Should contain at least len
+   *                 characters, no NUL-termination check is done.
+   * @param len      The number of characters to parse.
+   * @param base     The base of the number to use. Valid values are 2
+   *                 to 36 (inclusive).
+   *
+   * @returns true when a valid number was parsed, false otherwise.
    */
-  static cid_t parseCid(uint8_t c);
+  static bool parseNumber(uint8_t *out, const uint8_t *buf, uint8_t len, uint8_t base);
+  static bool parseNumber(uint16_t *out, const uint8_t *buf, uint8_t len, uint8_t base);
 
 /*******************************************************
  * Instance variables
  *******************************************************/
+
+  /**
+   * A buffer of this size should fit every response.
+   * The longest response is the CONNECT reponse, which is "7 <CID>" in
+   * non-verbose mode. So, using three bytes should be enough.
+   */
+  static const uint8_t MAX_RESPONSE_SIZE = 3;
+
+  /**
+   * A buffer of this size should every async response (excluding the
+   * leading escape sequence.
+   * The longest response is of the form
+   * "CONNECT <server CID> <new CID> <ip> <port>", so that would be
+   * "1 0 1 123.123.123.123 65535" == 27 bytes
+   */
+  static const uint8_t MAX_ASYNC_RESPONSE_SIZE = 27;
+
+  // TODO: How big should this buffer be?
+  static const uint16_t RX_DATA_BUF_SIZE = 128;
 
   /** The serial port to use, in serial mode */
   Stream *serial;
@@ -464,16 +516,20 @@ protected:
    * excluding all newline characters. Once the trailing newline is
    * received, this response should be processed and cleared.
    */
-  uint8_t rx_async[BUF_ASYNC_SIZE];
+  uint8_t rx_async[MAX_ASYNC_RESPONSE_SIZE];
   /** Number of bytes in rx_async */
   uint8_t rx_async_len;
+  /** Number of bytes of response left. Exact meaning depends on rx_state. */
+  uint8_t rx_async_left;
+  /** The subtype of asynchronous response bein received. */
+  uint8_t rx_async_subtype;
 
   /**
    * Ringbuffer for connection data, received while processing a command
    * (e.g., when we can't return this connection data to the
    * application).
    */
-  uint8_t rx_data[BUF_DATA_SIZE];
+  uint8_t rx_data[RX_DATA_BUF_SIZE];
   typedef uint8_t rx_data_index_t;
 
   /** Current state for the data stream read from the module */
