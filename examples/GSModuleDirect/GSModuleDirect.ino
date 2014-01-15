@@ -39,6 +39,11 @@ void setup() {
   gs.writeCommand("AT&V");
   gs.readResponse(print_line, &Serial);
 
+  // TODO: Add a proper API for scanning
+  Serial.println("Scanning...");
+  gs.writeCommand("AT+WS");
+  gs.readResponse(print_line, &Serial);
+
   // Enable DHCP
   gs.setDhcp(true, "pinoccio");
 
