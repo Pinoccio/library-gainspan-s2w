@@ -335,7 +335,7 @@ bool GSCore::writeCommandCheckOk(const char *fmt, ...)
   return (readResponse() == GS_SUCCESS);
 }
 
-GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid_t *connect_cid, bool keep_data)
+GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid_t *connect_cid, bool keep_data, line_callback_t callback, void *data)
 {
   uint16_t read = 0;
   uint16_t line_start = 0;
@@ -362,7 +362,8 @@ GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid
         continue;
 
       res = processResponseLine(buf + line_start, read - line_start, connect_cid);
-      if (keep_data && !dropped_data && res == GS_UNKNOWN_RESPONSE) {
+
+      if (keep_data && !callback && !dropped_data && res == GS_UNKNOWN_RESPONSE) {
         // Unknown response, so it's probably actual data that the
         // caller will want to have. Leave it in the buffer, and
         // terminate it with \r\n.
@@ -370,10 +371,14 @@ GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid
         if (read < *len) buf[read++] = '\n';
         line_start = read;
       } else {
-        // The response was known, or we're not interested in keeping
-        // extra data. Back it out of the buffer and continue with the
-        // next line or return.
+        // If we have a callback, pass any unknown response to it
+        if (keep_data && callback && res == GS_UNKNOWN_RESPONSE)
+          callback(&buf[line_start], read - line_start, data);
+
+        // Remove the line from the buffer since we either handled it
+        // already, or we're not interested in the data
         read = line_start;
+
         if (res != GS_UNKNOWN_RESPONSE && res != GS_CON_SUCCESS) {
           // All other responses indicate the end of the reply
           *len = read;
@@ -397,7 +402,8 @@ GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid
         // room, and move any data in the current line accordingly.
         if (line_start > 0) {
           #ifdef GS_LOG_ERRORS
-          dump_byte("Response buffer too small, removed byte: ", buf[line_start - 1]);
+          if (keep_data)
+            dump_byte("Response buffer too small, removed byte: ", buf[line_start - 1]);
           #endif
           memmove(&buf[line_start - 1], &buf[line_start], (read - line_start));
           line_start--;
@@ -406,7 +412,8 @@ GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid
           // line_start == 0 should only happen if len <
           // MAX_RESPONSE_SIZE, but better be safe than sorry.
           #ifdef GS_LOG_ERRORS
-          dump_byte("Response buffer tiny? Dropped byte: ", c);
+          if (keep_data)
+            dump_byte("Response buffer tiny? Dropped byte: ", c);
           #endif
         }
 
@@ -420,14 +427,21 @@ GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid
 }
 
 GSCore::GSResponse GSCore::readResponse(uint8_t *buf, uint16_t* len, cid_t *connect_cid) {
-  return readResponseInternal(buf, len, connect_cid, true);
+  return readResponseInternal(buf, len, connect_cid, true, NULL, NULL);
 }
 
 GSCore::GSResponse GSCore::readResponse(cid_t *connect_cid)
 {
   uint8_t buf[MAX_RESPONSE_SIZE];
   uint16_t len = sizeof(buf);
-  return readResponseInternal(buf, &len, connect_cid, /* keep_data */ false);
+  return readResponseInternal(buf, &len, connect_cid, false, NULL, NULL);
+}
+
+GSCore::GSResponse GSCore::readResponse(line_callback_t callback, void *data, cid_t *connect_cid)
+{
+  uint8_t buf[MAX_DATA_LINE_SIZE];
+  uint16_t len = sizeof(buf);
+  return readResponseInternal(buf, &len, connect_cid, true, callback, data);
 }
 
 bool GSCore::readDataResponse()

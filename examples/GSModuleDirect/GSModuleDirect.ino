@@ -6,6 +6,11 @@ GSModule gs;
 #define SSID "Foo"
 #define PASSPHRASE "Bar"
 
+static void print_line(const uint8_t *buf, uint16_t len, void *data) {
+  static_cast<Print*>(data)->write(buf, len);
+  static_cast<Print*>(data)->println();
+}
+
 void setup() {
   Serial.println("Gainspan Serial2Wifi demo");
   #ifdef VCC_ENABLE // For the Pinoccio scout
@@ -31,11 +36,8 @@ void setup() {
   // Write command and read any extra data returned
   Serial.println("Displaying configuration...");
   Serial.println();
-  uint8_t buf[1024];
-  uint16_t len = sizeof(buf);
   gs.writeCommand("AT&V");
-  gs.readResponse(buf, &len, NULL);
-  Serial.write((char*)buf, len);
+  gs.readResponse(print_line, &Serial);
 
   // Enable DHCP
   gs.setDhcp(true, "pinoccio");

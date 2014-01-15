@@ -69,6 +69,15 @@ public:
   /** Biggest valid CID */
   static const uint8_t MAX_CID = 0xf;
 
+  /**
+   * A buffer of this size should fit every line of data in a response.
+   * Since it's data, it's hard to predict how much is needed, but it's
+   * likely that a scan result is the longest response:
+   * 00:00:00:00:00:00, SSID                            , 11,  INFRA , -64 , WPA2-ENTERPRISE
+   * This is 87 bytes. To be safe, allocate a bit of extra room.
+   */
+  static const uint8_t MAX_DATA_LINE_SIZE = 128;
+
 /*******************************************************
  * Methods for setting up the module
  *******************************************************/
@@ -270,6 +279,9 @@ public:
    * the final response line is returned in the buffer (with normalized
    * newlines).
    *
+   * Empty lines in the result are ignored, since they are hard to
+   * recognize reliably.
+   *
    * @param buf            A buffer to store the received data in.
    * @param len            The pointer to the length of the buffer. Will
    *                       be set to the number of bytes written to buf.
@@ -289,6 +301,29 @@ public:
    */
   GSResponse readResponse(cid_t *connect_cid = NULL);
 
+  typedef void (*line_callback_t)(const uint8_t *buf, uint16_t len, void* data);
+
+  /**
+   * Read a single reply from the module and call the given callback for
+   * every line of data (e.g., that doesn't look like a known response).
+   * Empty lines in the result are ignored, since they are hard to
+   * recognize reliably.
+   *
+   * @param callback       This function is called for every line of data.
+   * @param data           This argument is passed to the callback every
+   *                       time.
+   * @param connect_cid    if passed, then a "CONNECT <CID>" reply is also
+   *                       handled and *connect_cid get set to the
+   *                       numerical cid sent by the module. This line
+   *                       is then not passed to the callback.
+   *
+   * Within the callback, no new commands should be sent to the module,
+   * since that will cause deadlocks and/or other unexpected behaviour.
+   *
+   * The callback should be prepared to process lines up to
+   * MAX_DATA_LINE_SIZE in length.
+   */
+  GSResponse readResponse(line_callback_t callback, void *data, cid_t *connect_cid = NULL);
 
   /**
    * Read a single data response (e.g. <Esc>O or <Esc>F in response to a
@@ -421,14 +456,23 @@ protected:
   /**
    * Internal version of readResponse.
    *
-   * @param keep_data   When true, any non-response data read is put
-   *                    into the buffer. When false, no meaningful data
-   *                    is retuned in the buffer, but the buffer is only
-   *                    used as temporary storage (and should be at
-   *                    least MAX_RESPONSE_SIZE long).
+   * When keep_data is false, any non-response data is ignored. The
+   * buffer passed is only used for temporary storage, its contents is
+   * meaningless afterwards. The buffer should be at least
+   * MAX_RESPONSE_SIZE long. Any callback passed is ignored.
+   *
+   * When keep_data is true and a callback is given, the callback is called for every line of
+   * non-response data and the data is then discarded. The buffer
+   * passed is only used for temporary storage and should be exactly
+   * MAX_DATA_LINE_SIZE long.
+   *
+   * When keep_data is true and no callback is given, any non-response
+   * data read is put into the buffer and *len is set to the total
+   * amount of non-response data put in the buffer.
+   *
    * @see readRespone for the other parameters.
    */
-  GSResponse readResponseInternal(uint8_t *buf, uint16_t *len, cid_t *connect_cid, bool keep_data);
+  GSResponse readResponseInternal(uint8_t *buf, uint16_t *len, cid_t *connect_cid, bool keep_data, line_callback_t callback, void *data);
 
   /**
    * Look at the given response line and find out what kind of reponse
