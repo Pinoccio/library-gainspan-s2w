@@ -685,7 +685,7 @@ void GSCore::processIncoming(int c)
               bufferFrameHeader(&this->head_frame);
               this->rx_state = GS_RX_BULK;
             } else {
-              #ifdef GS_LOG_ERRORS
+              #if defined(GS_LOG_ERRORS) || defined(GS_DUMP_LINES)
                 SERIAL_PORT_MONITOR.print("Invalid escape sequence: <ESC>Z");
                 SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
                 SERIAL_PORT_MONITOR.println();
@@ -696,6 +696,11 @@ void GSCore::processIncoming(int c)
             break;
 
           case GS_RX_ESC_A:
+            #ifdef GS_DUMP_LINES
+              SERIAL_PORT_MONITOR.print("Read async header: <ESC>A");
+              SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
+              SERIAL_PORT_MONITOR.println();
+            #endif
             // <Subtype><length 2 ascii char><data>
             if (parseNumber(&this->rx_async_subtype, this->rx_async, 1, 16) &&
                 parseNumber(&this->rx_async_left, this->rx_async + 1, 2, 10)) {
@@ -714,9 +719,18 @@ void GSCore::processIncoming(int c)
 
           case GS_RX_ASYNC:
             this->rx_state = GS_RX_IDLE;
+            #ifdef GS_DUMP_LINES
+              SERIAL_PORT_MONITOR.print("Read async data: ");
+              SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
+              SERIAL_PORT_MONITOR.println();
+            #endif
             if (!processAsync()) {
               #ifdef GS_LOG_ERRORS
-                SERIAL_PORT_MONITOR.print("Unknown async reponse: <ESC>A");
+                SERIAL_PORT_MONITOR.print("Unknown async reponse: subtype=");
+                SERIAL_PORT_MONITOR.print(this->rx_async_subtype);
+                SERIAL_PORT_MONITOR.print(", length=");
+                SERIAL_PORT_MONITOR.print(this->rx_async_len);
+                SERIAL_PORT_MONITOR.print(", data=");
                 SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
                 SERIAL_PORT_MONITOR.println();
               #endif
