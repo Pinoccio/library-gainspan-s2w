@@ -249,6 +249,113 @@ public:
    *            return false then.
    */
   bool disconnect(cid_t cid);
+
+/*******************************************************
+ * Network connection manager
+ *******************************************************/
+
+  enum WMode {
+    GS_INFRASTRUCTURE = 0,
+    GS_ADHOC = 1,
+    GS_LIMITED_AP = 2,
+  };
+
+  /**
+   * Set up automatic association parameters. These are used by the
+   * network connection manager and auto connect mode (transparent
+   * passtrhough).
+   *
+   * This command just sets the info, it does not enable either
+   * automatic mode itself.
+   *
+   * @param ssid      The SSID to connect to
+   * @param bssid     The BSSID (MAC address) of the access point. Should be
+   *                  a string of the form "12:34:56:78:9a:bc" or NULL
+   *                  to connect to any BSSID.
+   * @param channel   Only connect to access points on this channel.
+   *                  Channel 0 means "any channel".
+   * @param mode      The wireless network mode to use
+   */
+  bool setAutoAssociate(const char *ssid, const char *bssid = NULL, int channel = 0, WMode mode = GS_INFRASTRUCTURE)
+  {
+    return writeCommandCheckOk("AT+WAUTO=%d,\"%s\",%s,%d", mode, ssid, bssid ?: "", channel);
+  }
+
+  enum Protocol {
+    GS_UDP = 0,
+    GS_TCP = 1,
+  };
+
+  /**
+   * Set up automatic connection parameters. These are used by the
+   * network connection manager and auto connect mode (transparent
+   * passtrhough) to set up a TCP or UDP client connection after
+   * association is successful.
+   *
+   * This command just sets the info, it does not enable either
+   * automatic mode itself.
+   *
+   * @param ip        The remote ip address to connect to.
+   * @param port      The remote port to connect on.
+   * @param protocol  Wether to use TCP or UDP
+   */
+  bool setAutoConnectClient(const IPAddress &ip, uint16_t port, Protocol protocol = GS_TCP);
+
+  /**
+   * Similar to setAutoConnectClient, but sets up a server connection
+   * instead.
+   *
+   * @param port      The local port to listen on
+   * @param protocol  Wether to use TCP or UDP
+   */
+  bool setAutoConnectServer(uint16_t port, Protocol protocol = GS_TCP);
+
+  enum NCMMode {
+    GS_NCM_STATION = 0,
+    GS_NCM_LIMITED_AP = 1,
+  };
+
+  /**
+   * Enable or disable the network connection manager.
+   *
+   * Before starting the NCM, be sure to configure other regular
+   * settings like DHCP mode and WPA passphrase as well as the
+   * various setAuto* parameters.
+   *
+   * Note that the connection manager only retries the authorization and
+   * connection a limited number of times. For autoconnection, this
+   * limit can be configured to 0 which _might_ mean infinite, but the
+   * documentation is not clear on this (perhaps it'll mean 65536
+   * instead). If the retry count is reached, the NCM stops trying to
+   * setup the TCP/UDP connection, but it restarts on the next
+   * (re)association.
+   *
+   * For the association retry count, the documentation says 0 is not
+   * supported (but who knows...).
+   *
+   * @param enabled         Wether the the connection manager should be
+   *                        started or stopped.
+   * @param associate_only  When true, just associate. When false, also
+   *                        set up a network connection using the info
+   *                        set through setAutConnectClient or
+   *                        setAutoConnectServer.
+   * @param remember        When true, save these settings the current
+   *                        profile, so the connection manager can be
+   *                        autostarted on reset or power-on.
+   *                        Note that this only works if the current
+   *                        profile is actually saved to the (default)
+   *                        stored profile after this command.
+   *                        Also note that these settings are not
+   *                        displayed in AT&V, but really are part of
+   *                        the current/stored profiles.
+   * @param mode            Wether to use station or limited ap mode.
+   *                        This should probably match the value set
+   *                        through setAutoAssociate.
+   */
+  bool setNcm(bool enabled, bool associate_only = true, bool remember = false, NCMMode mode = GS_NCM_STATION)
+  {
+    return writeCommandCheckOk("AT+NCMAUTO=%d,%d,%d,%d", mode, enabled, !associate_only, !remember);
+  }
 };
 
 #endif // GS_MODULE_H

@@ -114,4 +114,17 @@ bool GSModule::addCert(const char *certname, bool to_flash, const uint8_t *buf, 
   return readResponse() == GS_SUCCESS;
 }
 
+bool GSModule::setAutoConnectClient(const IPAddress &ip, uint16_t port, Protocol protocol)
+{
+  uint8_t buf[16];
+  snprintf((char*)buf, sizeof(buf), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+
+  return writeCommandCheckOk("AT+NAUTO=0,%d,%s,%d", protocol, buf, port);
+}
+
+bool GSModule::setAutoConnectServer(uint16_t port, Protocol protocol)
+{
+  return writeCommandCheckOk("AT+NAUTO=1,%d,,%d", protocol, port);
+}
+
 // vim: set sw=2 sts=2 expandtab:

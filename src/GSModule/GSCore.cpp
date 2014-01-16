@@ -97,6 +97,7 @@ bool GSCore::_begin()
   this->tail_frame.length = 0;
   this->spi_prev_was_esc = false;
   this->spi_xoff = false;
+  this->ncm_auto_cid = INVALID_CID;
 
   // TODO: Query AT+NSTAT=? to see if we are aready connected (in case
   // the NCM already connected before we were initialized).
@@ -1069,9 +1070,16 @@ bool GSCore::processAsync()
         // CONNECT <CID>
         if (!parseNumber(&cid, &args[1], 1, 16))
           return false;
+        this->ncm_auto_cid = cid;
+        // Set connection info, even though we really only know it's
+        // connected
+        this->connections[cid].remote_ip = 0;
+        this->connections[cid].remote_port = 0;
+        this->connections[cid].local_port = 0;
+        this->connections[cid].error = 0;
+        this->connections[cid].connected = 1;
 
-        // TODO
-        return false;
+        return true;
       } else {
         // Incoming connection on a TCP server
         // CONNECT <server CID> <new CID> <ip> <port>,
@@ -1096,13 +1104,12 @@ bool GSCore::processAsync()
           SERIAL_PORT_MONITOR.println(cid);
         #endif
         this->connections[cid].error = true;
-        this->connections[cid].connected = false;
-        return true;
-      } else { // code == GS_ECIDCLOSE
-        // DISCONNECT <CID>
-        this->connections[cid].connected = false;
-        return true;
       }
+
+      this->connections[cid].connected = false;
+      if (cid == this->ncm_auto_cid)
+        this->ncm_auto_cid = INVALID_CID;
+      return true;
 
     default:
       // All others do not have arguments
@@ -1167,6 +1174,7 @@ bool GSCore::processAsync()
 void GSCore::processDeassociation()
 {
   this->associated = true;
+  this->ncm_auto_cid = INVALID_CID;
   for (cid_t cid = 0; cid <= MAX_CID; ++cid) {
     if (this->connections[cid].connected) {
       this->connections[cid].connected = false;

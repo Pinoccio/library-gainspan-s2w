@@ -213,6 +213,22 @@ public:
   }
 
   /**
+   * Returns the cid of the automatic connection set up by the network
+   * connection manager.
+   *
+   * Note that this can only return the client cid currently, since the
+   * server cid is not explicitely returned by the module.
+   *
+   * @returns the cid, or INVALID_CID if no connection has been made
+   * yet.
+   */
+  cid_t getNcmCid()
+  {
+    readAndProcessAsync();
+    return this->ncm_auto_cid;
+  }
+
+  /**
    * Returns wether we're currently associated to a wireless network.
    */
   bool isAssociated()
@@ -620,6 +636,12 @@ protected:
   RXFrame tail_frame;
 
   ConnectionInfo connections[MAX_CID + 1];
+
+  /**
+   * The cid of the automatic connection created by the network
+   * connection manager, if known.
+   */
+  uint8_t ncm_auto_cid;
 
   /** Are we associated? */
   uint8_t associated;
