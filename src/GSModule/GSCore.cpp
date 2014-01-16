@@ -1155,9 +1155,9 @@ bool GSCore::parseNumber(uint16_t *out, const uint8_t *buf, uint8_t len, uint8_t
     if (*buf >= '0' && *buf <= '9')
       result += (*buf - '0');
     else if (*buf >= 'a' && *buf <= 'z')
-      result += (*buf - 'a');
+      result += 10 + (*buf - 'a');
     else if (*buf >= 'A' && *buf <= 'Z')
-      result += (*buf - 'A');
+      result += 10 + (*buf - 'A');
     else
       return false;
     buf++;
