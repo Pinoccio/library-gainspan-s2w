@@ -56,7 +56,7 @@ static void dump_byte(const char *prefix, int c, bool newline = true) {
 
 GSCore::GSCore()
 {
-  this->ss = INVALID_PIN;
+  this->ss_pin = INVALID_PIN;
 
   static_assert( max_for_type(__typeof__(rx_async_len)) >= sizeof(rx_async) - 1, "rx_async_len is too small for rx_async" );
   static_assert( max_for_type(rx_data_index_t) >= sizeof(rx_data) - 1, "rx_data_index_t is too small for rx_data" );
@@ -70,7 +70,7 @@ GSCore::GSCore()
 
 bool GSCore::begin(Stream &serial)
 {
-  if (this->serial || this->ss != INVALID_PIN)
+  if (this->serial || this->ss_pin != INVALID_PIN)
     return false;
 
   this->serial = &serial;
@@ -79,10 +79,10 @@ bool GSCore::begin(Stream &serial)
 
 bool GSCore::begin(uint8_t ss)
 {
-  if (this->serial || this->ss != INVALID_PIN || ss == INVALID_PIN)
+  if (this->serial || this->ss_pin != INVALID_PIN || ss == INVALID_PIN)
     return false;
 
-  this->ss = ss;
+  this->ss_pin = ss;
 
   pinMode(ss, OUTPUT);
   digitalWrite(ss, HIGH);
@@ -134,9 +134,9 @@ bool GSCore::_begin()
 void GSCore::end()
 {
   this->serial = NULL;
-  if (this->ss != INVALID_PIN)
-    pinMode(this->ss, INPUT);
-  this->ss = INVALID_PIN;
+  if (this->ss_pin != INVALID_PIN)
+    pinMode(this->ss_pin, INPUT);
+  this->ss_pin = INVALID_PIN;
 }
 
 /*******************************************************
@@ -475,9 +475,9 @@ uint8_t GSCore::transferSpi(uint8_t out)
 {
   // Note that we need to toggle SS for every byte, otherwise the module
   // will ignore subsequent bytes and return 0xff
-  digitalWrite(this->ss, LOW);
+  digitalWrite(this->ss_pin, LOW);
   uint8_t in = SPI.transfer(out);
-  digitalWrite(this->ss, HIGH);
+  digitalWrite(this->ss_pin, HIGH);
   #ifdef GS_DUMP_SPI
   if (in != SPI_SPECIAL_IDLE || out != SPI_SPECIAL_IDLE) {
     dump_byte("SPI: >> ", out, false);
@@ -495,7 +495,7 @@ void GSCore::writeRaw(const uint8_t *buf, uint16_t len)
       dump_byte(">> ", buf[i]);
     #endif
     this->serial->write(buf, len);
-  } else if (this->ss) {
+  } else if (this->ss_pin) {
     while (len) {
       if (this->spi_xoff) {
         // Module sent XOFF, so send IDLE bytes until it reports it has
@@ -523,7 +523,7 @@ int GSCore::readRaw()
   int c;
   if (this->serial) {
     c = this->serial->read();
-  } else if (this->ss != INVALID_PIN) {
+  } else if (this->ss_pin != INVALID_PIN) {
     c = processSpiSpecial(transferSpi(SPI_SPECIAL_IDLE));
   } else {
     #ifdef GS_LOG_ERRORS

@@ -587,8 +587,8 @@ protected:
 
   /** The serial port to use, in serial mode */
   Stream *serial;
-  /** The SPI slave select pin to use, in SPI mode */
-  uint8_t ss;
+  /** The slave select pin to use, in SPI mode */
+  uint8_t ss_pin;
   /** When true, the module has sent xoff */
   bool spi_xoff;
   /** When true, the previous SPI byte was an escape character */
