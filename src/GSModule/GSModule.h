@@ -148,6 +148,40 @@ public:
   bool setStaticIp(const IPAddress& ip, const IPAddress& netmask, const IPAddress& gateway);
 
   /**
+   * Save the current settings (profile) to flash.
+   *
+   * @param profile The profile number in flash to use. Can be either 0
+   *                or 1.
+   */
+  bool saveProfile(uint8_t profile)
+  {
+    return writeCommandCheckOk("AT&W%d", profile);
+  }
+
+  /**
+   * Load settings from the given profile in flash.
+   *
+   * @param profile The profile number in flash to use. Can be either 0
+   *                or 1.
+   */
+  bool loadProfile(uint8_t profile)
+  {
+    return writeCommandCheckOk("AT&W%d", profile);
+  }
+
+  /**
+   * Sets the number of the default profile, i.e. the profile that is
+   * automatically loaded from flash on power-on and reset.
+   *
+   * @param profile The profile number in flash to use. Can be either 0
+   *                or 1.
+   */
+  bool setDefaultProfile(uint8_t profile)
+  {
+    return writeCommandCheckOk("ATZ%d", profile);
+  }
+
+  /**
    * Perform TLS handshaking. Should be called after a connection is
    * opened, but before any data is sent. After this, all data sent will
    * be encrypted.
