@@ -56,7 +56,7 @@ static void dump_byte(const char *prefix, int c, bool newline = true) {
 
 GSCore::GSCore()
 {
-  this->ss = SPI_DISABLED;
+  this->ss = INVALID_PIN;
 
   static_assert( max_for_type(__typeof__(rx_async_len)) >= sizeof(rx_async) - 1, "rx_async_len is too small for rx_async" );
   static_assert( max_for_type(rx_data_index_t) >= sizeof(rx_data) - 1, "rx_data_index_t is too small for rx_data" );
@@ -70,7 +70,7 @@ GSCore::GSCore()
 
 bool GSCore::begin(Stream &serial)
 {
-  if (this->serial || this->ss != SPI_DISABLED)
+  if (this->serial || this->ss != INVALID_PIN)
     return false;
 
   this->serial = &serial;
@@ -79,7 +79,7 @@ bool GSCore::begin(Stream &serial)
 
 bool GSCore::begin(uint8_t ss)
 {
-  if (this->serial || this->ss != SPI_DISABLED || ss == SPI_DISABLED)
+  if (this->serial || this->ss != INVALID_PIN || ss == INVALID_PIN)
     return false;
 
   this->ss = ss;
@@ -134,9 +134,9 @@ bool GSCore::_begin()
 void GSCore::end()
 {
   this->serial = NULL;
-  if (this->ss != SPI_DISABLED)
+  if (this->ss != INVALID_PIN)
     pinMode(this->ss, INPUT);
-  this->ss = SPI_DISABLED;
+  this->ss = INVALID_PIN;
 }
 
 /*******************************************************
@@ -523,7 +523,7 @@ int GSCore::readRaw()
   int c;
   if (this->serial) {
     c = this->serial->read();
-  } else if (this->ss != SPI_DISABLED) {
+  } else if (this->ss != INVALID_PIN) {
     c = processSpiSpecial(transferSpi(SPI_SPECIAL_IDLE));
   } else {
     #ifdef GS_LOG_ERRORS

@@ -69,6 +69,9 @@ public:
   /** Biggest valid CID */
   static const uint8_t MAX_CID = 0xf;
 
+  /** Value to indicate "no pin" */
+  static const uint8_t INVALID_PIN = 0xff;
+
   /**
    * A buffer of this size should fit every line of data in a response.
    * Since it's data, it's hard to predict how much is needed, but it's
@@ -646,8 +649,6 @@ protected:
   /** Are we associated? */
   uint8_t associated;
 
-  /** Value for the ss attribute when SPI is not enabled. */
-  static const uint8_t SPI_DISABLED = 0xff;
   /** This byte is sent when there is no real data */
   static const uint8_t SPI_SPECIAL_IDLE = 0xf5;
   /** Indicates the buffer is full and no further data should be sent */
