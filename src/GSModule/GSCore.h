@@ -409,7 +409,7 @@ protected:
    *                       handled and *connect_cid get set to the
    *                       numerical cid sent by the module.
    */
-  void processIncoming(int c);
+  bool processIncoming(int c);
 
   /**
    * Put an incoming data byte into rx_data.

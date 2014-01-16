@@ -595,10 +595,10 @@ bool GSCore::isSpiSpecial(uint8_t c)
   }
 }
 
-void GSCore::processIncoming(int c)
+bool GSCore::processIncoming(int c)
 {
   if (c < 0)
-    return;
+    return false;
 
   #ifdef GS_DUMP_BYTES
   dump_byte("<< ", c);
@@ -750,6 +750,7 @@ void GSCore::processIncoming(int c)
         this->rx_state = GS_RX_IDLE;
       break;
   }
+  return true;
 }
 
 void GSCore::bufferIncomingData(uint8_t c)
@@ -822,11 +823,9 @@ bool GSCore::getFrameHeader(cid_t cid)
     // The buffer is empty. See if we can read more data from the
     // module.
     while (this->tail_frame.length == 0) {
-      int c = readRaw();
       // Don't block
-      if (c < 0)
+      if (!processIncoming(readRaw()))
         return false;
-      processIncoming(c);
     }
   }
   return true;
