@@ -94,10 +94,22 @@ public:
   bool begin(Stream &serial);
 
   /**
-   * Set up this library to talk over SPI, using the given SPI slave
-   * select pin. Sets the given pin to output mode.
+   * Set up this library to talk over SPI.
+   *
+   * @param ss          The Arduino pin number that is connected to the
+   *                    Gainspan's SPI Slave Select pin. Will be
+   *                    configured as an output pin automatically.
+   * @param data_read   The Arduino pin number that is connected to the
+   *                    Gainspan's "data ready" pin (GPIO28). Will be
+   *                    configured as an input pin automatically.
+   *
+   *                    If INVALID_PIN is passed, the library will
+   *                    resort to polling the SPI port instead of using
+   *                    this pin. This is not recommended, as it adds
+   *                    extra delays and latencies and is not documented
+   *                    to work by Gainspan.
    */
-  bool begin(uint8_t ss);
+  bool begin(uint8_t ss, uint8_t data_read = INVALID_PIN);
 
   /**
    * Clean up this library (for example to switch from UART to SPI).
@@ -589,6 +601,8 @@ protected:
   Stream *serial;
   /** The slave select pin to use, in SPI mode */
   uint8_t ss_pin;
+  /** The data_ready pin to use, in SPI mode */
+  uint8_t data_ready_pin;
   /** When true, the module has sent xoff */
   bool spi_xoff;
   /** When true, the previous SPI byte was an escape character */
