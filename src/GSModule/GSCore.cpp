@@ -98,6 +98,10 @@ bool GSCore::_begin()
   this->spi_prev_was_esc = false;
   this->spi_xoff = false;
 
+  // TODO: Query AT+NSTAT=? to see if we are aready connected (in case
+  // the NCM already connected before we were initialized).
+  this->associated = false;
+
   // Flush any serial data still buffered
   while(readRaw() != -1) /* nothing */;
 
@@ -1116,7 +1120,8 @@ bool GSCore::processAsync()
         case GS_ASYNC_DISASSO_EVT:
           // TODO: This means the wifi association has broken. Update our
           // state.
-          return false;
+          processDeassociation();
+          return true;
 
         case GS_ASYNC_STBY_TMR_EVT:
         case GS_ASYNC_STBY_ALM_EVT:
@@ -1138,8 +1143,8 @@ bool GSCore::processAsync()
         case GS_ASYNC_NWCONN_SUCCESS:
           // This means that the Network Connection Manager has
           // succesfully associated.
-          // TODO
-          return false;
+          this->associated = true;
+          return true;
 
         case GS_ASYNC_ENOIP:
           // ERROR: IP CONFIG FAIL
@@ -1147,8 +1152,8 @@ bool GSCore::processAsync()
           // Connection Manager fails.
           // Afterwards, the hardware loses its address and does not
           // retry DHCP again.
-          // TODO
-          return false;
+          processDeassociation();
+          return true;
 
         default:
           // This should never happen, but the compiler gives a warning if
@@ -1156,6 +1161,17 @@ bool GSCore::processAsync()
           return false;
       }
 
+  }
+}
+
+void GSCore::processDeassociation()
+{
+  this->associated = true;
+  for (cid_t cid = 0; cid <= MAX_CID; ++cid) {
+    if (this->connections[cid].connected) {
+      this->connections[cid].connected = false;
+      this->connections[cid].error = true;
+    }
   }
 }
 

@@ -212,6 +212,15 @@ public:
     return this->connections[cid];
   }
 
+  /**
+   * Returns wether we're currently associated to a wireless network.
+   */
+  bool isAssociated()
+  {
+    readAndProcessAsync();
+    return this->associated;
+  }
+
 /*******************************************************
  * Methods for writing commands / reading replies
  *******************************************************/
@@ -507,6 +516,11 @@ protected:
    */
   bool processAsync();
 
+  /**
+   * Should be called when we learn we're no longer associated.
+   * Updates the association state and all connection states.
+   */
+  void processDeassociation();
 
 /*******************************************************
  * Static helper methods
@@ -606,6 +620,9 @@ protected:
   RXFrame tail_frame;
 
   ConnectionInfo connections[MAX_CID + 1];
+
+  /** Are we associated? */
+  uint8_t associated;
 
   /** Value for the ss attribute when SPI is not enabled. */
   static const uint8_t SPI_DISABLED = 0xff;
