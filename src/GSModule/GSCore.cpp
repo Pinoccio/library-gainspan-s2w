@@ -854,6 +854,27 @@ int GSCore::getData()
   }
 }
 
+void GSCore::readAndProcessAsync()
+{
+  // Read and process bytes until:
+  //  - There are no more bytes to read.
+  //  - We end up in a data packet (which we don't want to read all the
+  //    way through, since it'll likely fill up our buffers.
+  //
+  //  Note that we always read at least one byte, so if we start out in
+  //  a data packet, we'll always advance it by one byte to prevent
+  //  deadlocking ourselves.
+  while (processIncoming(readRaw())) {
+    switch (this->rx_state) {
+      case GS_RX_ESC_Z:
+      case GS_RX_BULK:
+        return;
+      default:
+        continue;
+    }
+  }
+}
+
 void GSCore::dropData(uint8_t num_bytes) {
   while(num_bytes--) {
     cid_t cid;

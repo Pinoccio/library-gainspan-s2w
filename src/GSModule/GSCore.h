@@ -206,7 +206,9 @@ public:
    * Return information about the given cid.
    * Only valid cids should be passed.
    */
-  const ConnectionInfo& getConnectionInfo(cid_t cid) {
+  const ConnectionInfo& getConnectionInfo(cid_t cid)
+  {
+    readAndProcessAsync();
     return this->connections[cid];
   }
 
@@ -446,6 +448,11 @@ protected:
    * @returns the data byte, or -1 when no data is available.
    */
   int getData();
+
+  /**
+   * Read and process any async responses available.
+   */
+  void readAndProcessAsync();
 
   /**
    * Drop a byte from the tail of rx_data, to make room for incoming
