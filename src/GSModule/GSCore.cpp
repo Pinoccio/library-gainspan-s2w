@@ -519,9 +519,7 @@ int GSCore::readRaw()
   if (this->serial) {
     c = this->serial->read();
   } else if (this->ss != SPI_DISABLED) {
-    digitalWrite(this->ss, LOW);
     c = processSpiSpecial(transferSpi(SPI_SPECIAL_IDLE));
-    digitalWrite(this->ss, HIGH);
   } else {
     #ifdef GS_LOG_ERRORS
       SERIAL_PORT_MONITOR.println("Begin() not called!");
