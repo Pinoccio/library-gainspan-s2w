@@ -1072,42 +1072,42 @@ bool GSCore::processAsync()
         return false;
 
       switch (this->rx_async_subtype) {
-        case GS_FAILURE:
+        case GS_ASYNC_FAILURE:
           // Means the Network Connection Manager has used all it's
           // retries and is giving up on setting up a L4 (TCP/UDP)
           // connection (until the next (re)association). For now, just
           // ignore.
           return false;
 
-        case GS_DISASSO_EVT:
+        case GS_ASYNC_DISASSO_EVT:
           // TODO: This means the wifi association has broken. Update our
           // state.
           return false;
 
-        case GS_STBY_TMR_EVT:
-        case GS_STBY_ALM_EVT:
-        case GS_DPSLEEP_EVT:
+        case GS_ASYNC_STBY_TMR_EVT:
+        case GS_ASYNC_STBY_ALM_EVT:
+        case GS_ASYNC_DPSLEEP_EVT:
           // TODO: These are given after the wifi module is told to go
           // into standby. How to handle these? Perhaps just print some
           // debug info for now and then ignore them?
           return false;
 
-        case GS_BOOT_UNEXPEC:
-        case GS_BOOT_INTERNAL:
-        case GS_BOOT_EXTERNAL:
+        case GS_ASYNC_BOOT_UNEXPEC:
+        case GS_ASYNC_BOOT_INTERNAL:
+        case GS_ASYNC_BOOT_EXTERNAL:
           // These indicate the hardware has just reset
           // TODO: Reset our state to match the hardware. Also make sure
           // to stop waiting for a reply to a command, since it will never
           // come.
           return false;
 
-        case GS_NWCONN_SUCCESS:
+        case GS_ASYNC_NWCONN_SUCCESS:
           // This means that the Network Connection Manager has
           // succesfully associated.
           // TODO
           return false;
 
-        case GS_ENOIP:
+        case GS_ASYNC_ENOIP:
           // ERROR: IP CONFIG FAIL
           // Sent the DHCP renew, or DHCP lease initiated by the Network
           // Connection Manager fails.
