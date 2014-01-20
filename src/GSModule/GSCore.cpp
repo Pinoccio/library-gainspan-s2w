@@ -274,20 +274,33 @@ bool GSCore::writeData(cid_t cid, const uint8_t *buf, uint16_t len)
   if (len > 1400)
     return writeData(cid, buf, 1400) && writeData(cid, buf + 1400, len - 1400);
 
-  uint8_t header[8]; // Including a trailing 0 that snprintf insists to write
-  // TODO: Also support UDP server
-  snprintf((char*)header, sizeof(header), "\x1bZ%x%04d", cid, len);
-  writeRaw(header, sizeof(header) - 1);
-  writeRaw(buf, len);
   #ifdef GS_DUMP_LINES
-  SERIAL_PORT_MONITOR.print("Written bulk data frame for cid ");
+  SERIAL_PORT_MONITOR.print("Writing bulk data frame for cid ");
   SERIAL_PORT_MONITOR.print(cid);
   SERIAL_PORT_MONITOR.print(" containing ");
   SERIAL_PORT_MONITOR.print(len);
   SERIAL_PORT_MONITOR.println(" bytes");
   #endif
 
-  return readDataResponse();
+  uint8_t header[8]; // Including a trailing 0 that snprintf insists to write
+  // TODO: Also support UDP server
+  snprintf((char*)header, sizeof(header), "\x1bZ%x%04d", cid, len);
+  // First, write the escape sequence up to the cid. After this, the
+  // module responds with <ESC>O or <ESC>F.
+  writeRaw(header, 3);
+  if (!readDataResponse()) {
+    #ifdef GS_LOG_ERROR
+    SERIAL_PORT_MONITOR.println("Sending bulk data frame failed");
+    #endif
+    return false;
+  }
+
+  // Then, write the rest of the escape sequence (-1 to not write the
+  // trailing 0)
+  writeRaw(header + 3, sizeof(header) - 1 - 3);
+  // And write the actual data
+  writeRaw(buf, len);
+  return false;
 }
 
 /*******************************************************
