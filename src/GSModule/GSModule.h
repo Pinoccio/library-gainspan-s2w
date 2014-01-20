@@ -302,6 +302,14 @@ public:
   bool setAutoConnectClient(const IPAddress &ip, uint16_t port, Protocol protocol = GS_TCP);
 
   /**
+   * Set up automatic connection parameters, but use a hostname (or an
+   * ip address in string form) instead of an IPAddress. The connection
+   * manager will take care of doing the DNS lookup (needs firmware
+   * 2.5.1 or above).
+   */
+  bool setAutoConnectClient(const char *name, uint16_t port, Protocol protocol = GS_TCP);
+
+  /**
    * Similar to setAutoConnectClient, but sets up a server connection
    * instead.
    *
