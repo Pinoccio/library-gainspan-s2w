@@ -358,10 +358,16 @@ GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid
   uint16_t line_start = 0;
   bool dropped_data = false;
   GSResponse res;
+  unsigned long start = millis();
   while(true) {
     int c = readRaw();
     if (c == -1) {
-      // TODO: timeout?
+      if ((unsigned long)(millis() - start) > RESPONSE_TIMEOUT) {
+        #ifdef GS_LOG_ERRORS
+        SERIAL_PORT_MONITOR.println("Response timeout");
+        #endif
+        return GS_RESPONSE_TIMEOUT;
+      }
       continue;
     }
 
@@ -463,10 +469,17 @@ GSCore::GSResponse GSCore::readResponse(line_callback_t callback, void *data, ci
 
 bool GSCore::readDataResponse()
 {
+  unsigned long start = millis();
   while(true) {
     int c = readRaw();
+
     if (c == -1) {
-      // TODO: timeout?
+      if ((unsigned long)(millis() - start) > RESPONSE_TIMEOUT) {
+        #ifdef GS_LOG_ERRORS
+        SERIAL_PORT_MONITOR.println("Data response timeout");
+        #endif
+        return false;
+      }
       continue;
     }
 

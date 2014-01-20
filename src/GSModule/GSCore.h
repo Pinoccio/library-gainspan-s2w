@@ -73,6 +73,13 @@ public:
   static const uint8_t INVALID_PIN = 0xff;
 
   /**
+   * How many milliseconds to wait for a a response? Should be fairly
+   * big, since the AT+WA command might take quite a bit of time
+   * TODO: Allow different timeouts per command?
+   */
+  static const unsigned long RESPONSE_TIMEOUT = 20 * 1000;
+
+  /**
    * A buffer of this size should fit every line of data in a response.
    * Since it's data, it's hard to predict how much is needed, but it's
    * likely that a scan result is the longest response:
@@ -289,6 +296,7 @@ public:
     // These codes are never emitted by the hardware, but used in the
     // code to comunicate between different parts of the code.
     GS_UNKNOWN_RESPONSE,
+    GS_RESPONSE_TIMEOUT,
   };
 
   /**
@@ -328,6 +336,10 @@ public:
    * @param connect_cid    if passed, then a "CONNECT <CID>" reply is also
    *                       handled and *connect_cid get set to the
    *                       numerical cid sent by the module.
+   *
+   * @returns the code for the response read, or GS_RESPONSE_TIMEOUT
+   *          when no response was read within GS_RESPONSE_TIMEOUT
+   *          milliseconds.
    */
   GSResponse readResponse(uint8_t *buf, uint16_t *len, cid_t *connect_cid = NULL);
 
@@ -338,6 +350,10 @@ public:
    * @param connect_cid    if passed, then a "CONNECT <CID>" reply is also
    *                       handled and *connect_cid get set to the
    *                       numerical cid sent by the module.
+   *
+   * @returns the code for the response read, or GS_RESPONSE_TIMEOUT
+   *          when no response was read within GS_RESPONSE_TIMEOUT
+   *          milliseconds.
    */
   GSResponse readResponse(cid_t *connect_cid = NULL);
 
@@ -356,6 +372,10 @@ public:
    *                       handled and *connect_cid get set to the
    *                       numerical cid sent by the module. This line
    *                       is then not passed to the callback.
+   *
+   * @returns the code for the response read, or GS_RESPONSE_TIMEOUT
+   *          when no response was read within GS_RESPONSE_TIMEOUT
+   *          milliseconds.
    *
    * Within the callback, no new commands should be sent to the module,
    * since that will cause deadlocks and/or other unexpected behaviour.
