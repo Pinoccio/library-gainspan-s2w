@@ -206,9 +206,6 @@ size_t GSCore::readData(cid_t cid, uint8_t *buf, size_t size)
       if (c == -1)
         break;
       buf[read++] = c;
-      #ifdef GS_DUMP_BYTES
-      dump_byte("<< ", c);
-      #endif
       this->tail_frame.length--;
       if(--this->head_frame.length == 0) {
         this->rx_state = GS_RX_IDLE;
@@ -461,9 +458,15 @@ bool GSCore::readDataResponse()
     }
 
     if (this->rx_state == GS_RX_ESC && c == 'O') {
+      #ifdef GS_DUMP_LINES
+      SERIAL_PORT_MONITOR.println("Read data OK response");
+      #endif
       this->rx_state = GS_RX_IDLE;
       return true;
     } else if (this->rx_state == GS_RX_ESC && c == 'F') {
+      #ifdef GS_DUMP_LINES
+      SERIAL_PORT_MONITOR.println("Read data FAIL response");
+      #endif
       this->rx_state = GS_RX_IDLE;
       return true;
     } else {
@@ -525,6 +528,10 @@ int GSCore::readRaw()
   int c;
   if (this->serial) {
     c = this->serial->read();
+    #ifdef GS_DUMP_BYTES
+    if (c >= 0)
+      dump_byte("<< ", c);
+    #endif
   } else if (this->ss_pin != INVALID_PIN) {
 
     // When the data ready pin (GPIO28) is low, there is no point in
@@ -570,47 +577,52 @@ int GSCore::readRaw()
 
 int GSCore::processSpiSpecial(uint8_t c)
 {
-  // Previous byte was an escape byte, so unescape this byte but don't
-  // interpret any special characters inside.
-  if (this->spi_prev_was_esc) {
-    this->spi_prev_was_esc = false;
-    return c ^ SPI_ESC_XOR;
-  }
   int res = -1;
-  switch(c) {
-    case SPI_SPECIAL_ALL_ONE:
-      // TODO: Handle these? Flag an error? Wait for SPI_SPECIAL_ACK?
-      #ifdef GS_LOG_ERRORS
-      SERIAL_PORT_MONITOR.println("SPI 0xff?");
-      #endif
-      break;
-    case SPI_SPECIAL_ALL_ZERO:
-      // TODO: Handle these? Flag an error? Wait for SPI_SPECIAL_ACK?
-      #ifdef GS_LOG_ERRORS
-      SERIAL_PORT_MONITOR.println("SPI 0x00?");
-      #endif
-      break;
-    case SPI_SPECIAL_ACK:
-      // TODO: What does this one mean exactly?
-      #ifdef GS_LOG_ERRORS
-      SERIAL_PORT_MONITOR.println("SPI ACK received?");
-      #endif
-      break;
-    case SPI_SPECIAL_IDLE:
-      break;
-    case SPI_SPECIAL_XOFF:
-      this->spi_xoff = true;
-      break;
-    case SPI_SPECIAL_XON:
-      this->spi_xoff = false;
-      break;
-    case SPI_SPECIAL_ESC:
-      this->spi_prev_was_esc = true;
-      break;
-    default:
-      res = c;
-      break;
+  if (this->spi_prev_was_esc) {
+    // Previous byte was an escape byte, so unescape this byte but don't
+    // interpret any special characters inside.
+    this->spi_prev_was_esc = false;
+    res = c ^ SPI_ESC_XOR;
+  } else {
+    switch(c) {
+      case SPI_SPECIAL_ALL_ONE:
+        // TODO: Handle these? Flag an error? Wait for SPI_SPECIAL_ACK?
+        #ifdef GS_LOG_ERRORS
+        SERIAL_PORT_MONITOR.println("SPI 0xff?");
+        #endif
+        break;
+      case SPI_SPECIAL_ALL_ZERO:
+        // TODO: Handle these? Flag an error? Wait for SPI_SPECIAL_ACK?
+        #ifdef GS_LOG_ERRORS
+        SERIAL_PORT_MONITOR.println("SPI 0x00?");
+        #endif
+        break;
+      case SPI_SPECIAL_ACK:
+        // TODO: What does this one mean exactly?
+        #ifdef GS_LOG_ERRORS
+        SERIAL_PORT_MONITOR.println("SPI ACK received?");
+        #endif
+        break;
+      case SPI_SPECIAL_IDLE:
+        break;
+      case SPI_SPECIAL_XOFF:
+        this->spi_xoff = true;
+        break;
+      case SPI_SPECIAL_XON:
+        this->spi_xoff = false;
+        break;
+      case SPI_SPECIAL_ESC:
+        this->spi_prev_was_esc = true;
+        break;
+      default:
+        res = c;
+        break;
+    }
   }
+  #ifdef GS_DUMP_BYTES
+  if (res >= 0)
+    dump_byte("<< ", res);
+  #endif
   return res;
 }
 
@@ -634,10 +646,6 @@ bool GSCore::processIncoming(int c)
 {
   if (c < 0)
     return false;
-
-  #ifdef GS_DUMP_BYTES
-  dump_byte("<< ", c);
-  #endif
 
   switch(this->rx_state) {
     case GS_RX_IDLE:
@@ -878,9 +886,6 @@ int GSCore::getData()
     // No data buffered, try reading from the module directly
     int c = readRaw();
     if (c >= 0) {
-      #ifdef GS_DUMP_BYTES
-      dump_byte("<< ", c);
-      #endif
       this->tail_frame.length--;
       if(--this->head_frame.length == 0)
         this->rx_state = GS_RX_IDLE;
