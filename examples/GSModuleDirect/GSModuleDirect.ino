@@ -33,6 +33,13 @@ void setup() {
   gs.writeCommand("AT");
   gs.readResponse();
 
+  // Disable the NCM, just in case it was set to autostart. Wait a bit
+  // before doing so, because it seems that if the NCM is configured to
+  // start on boot and we try to disable it within the first second or
+  // so, the module locks up...
+  delay(1000);
+  gs.setNcm(false);
+
   // Write command and read any extra data returned
   Serial.println("Displaying configuration...");
   Serial.println();
