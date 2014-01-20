@@ -288,8 +288,6 @@ public:
 
     // These codes are never emitted by the hardware, but used in the
     // code to comunicate between different parts of the code.
-    GS_NO_RESPONSE,
-    GS_HANDLED_ASYNC,
     GS_UNKNOWN_RESPONSE,
   };
 
@@ -441,15 +439,10 @@ protected:
   /**
    * Processes an incoming byte read from the module.
    *
-   * @return When this byte completes a response, its type is returned
-   * (except for async responses, which return GS_HANDLED_ASYNC). When
-   * this byte does not complete a response, GS_NO_RESPONSE is returned.
+   * @return true when a valid byte was passed, false when c was -1.
    *
    * @param c              The byte to process. If it is -1, does
-   *                       nothing and retrusn GS_NO_RESPONSE.
-   * @param connect_cid    if passed, then a "CONNECT <CID>" reply is also
-   *                       handled and *connect_cid get set to the
-   *                       numerical cid sent by the module.
+   *                       nothing and retruns false.
    */
   bool processIncoming(int c);
 
@@ -524,8 +517,6 @@ protected:
   /**
    * Look at the given response line and find out what kind of reponse
    * it is.
-   *  - If the response is an asynchronous event, it is handled and
-   *    GS_HANDLED_ASYNC is returned.
    *  - If the response does not look like a known response,
    *    GS_UNKNOWN_RESPONSE is returned.
    *  - Otherwise, the corresponding constant for the response returned.
