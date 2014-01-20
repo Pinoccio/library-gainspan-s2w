@@ -74,6 +74,12 @@ GSClient::operator bool()
   return (this->cid != GSModule::INVALID_CID);
 }
 
+GSClient& GSClient::operator =(GSCore::cid_t cid)
+{
+  this->cid = cid;
+  return *this;
+}
+
 bool GSClient::enableTls(const char *certname)
 {
   return gs.enableTls(this->cid, certname);

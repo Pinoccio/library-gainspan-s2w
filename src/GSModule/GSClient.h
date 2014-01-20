@@ -25,6 +25,7 @@ class GSClient : public Client {
     virtual void stop();
     virtual uint8_t connected();
     virtual operator bool();
+    GSClient& operator =(GSCore::cid_t cid);
 
     // Include other overloads of write
     using Print::write;
