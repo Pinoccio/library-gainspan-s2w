@@ -33,6 +33,10 @@
 // Output debugging info on error conditions
 #define GS_LOG_ERRORS
 
+// Output debugging info on things that are unhandled, but are also know
+// to happen in normal operation
+//#define GS_LOG_ERRORS_VERBOSE
+
 // Dump full lines of I/O
 //#define GS_DUMP_LINES
 

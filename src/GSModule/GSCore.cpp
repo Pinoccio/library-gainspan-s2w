@@ -29,7 +29,7 @@
 #include "GSCore.h"
 #include "util.h"
 
-#if defined(GS_DUMP_BYTES) || defined(GS_DUMP_SPI) || defined(GS_LOG_ERRORS)
+#if defined(GS_DUMP_BYTES) || defined(GS_DUMP_SPI) || defined(GS_LOG_ERRORS) || defined(GS_LOG_ERRORS_VERBOSE)
 static void dump_byte(const char *prefix, int c, bool newline = true) {
   if (c >= 0) {
     SERIAL_PORT_MONITOR.print(prefix);
@@ -619,7 +619,10 @@ int GSCore::processSpiSpecial(uint8_t c)
         break;
       case SPI_SPECIAL_ALL_ZERO:
         // TODO: Handle these? Flag an error? Wait for SPI_SPECIAL_ACK?
-        #ifdef GS_LOG_ERRORS
+        // Seems these happen when saving the current profile to flash
+        // (probably because the APP firmware is too busy to refill the
+        // SPI buffer in the module).
+        #ifdef GS_LOG_ERRORS_VERBOSE
         SERIAL_PORT_MONITOR.println("SPI 0x00?");
         #endif
         break;
@@ -679,9 +682,12 @@ bool GSCore::processIncoming(int c)
         // Escape character, incoming data
         this->rx_state = GS_RX_ESC;
       } else {
-        #ifdef GS_LOG_ERRORS
+        #ifdef GS_LOG_ERRORS_VERBOSE
           // Don't log \r\n, since the synchronous response parsing
-          // often leaves a \n behind
+          // often leaves a \n behind. Only log in VERBOSE, since some
+          // async responses also have data preceding them (like
+          // NWCONN-SUCCESS that prints info about the IP configuration
+          // _before_ the actual async response...).
           if (c != '\n' && c != '\r')
             dump_byte("Discarding non-escaped byte, no synchronous response expected: ", c);
         #endif
