@@ -43,6 +43,14 @@ int GSModule::connectTcp(const IPAddress& ip, uint16_t port)
   return cid;
 }
 
+bool GSModule::associate(const char *ssid, const char *bssid, uint8_t channel, bool best_rssi)
+{
+  bool ok = writeCommandCheckOk("AT+WA=\"%s\",%s,%d,%d", ssid, bssid ?: "", channel, best_rssi);
+  if (ok)
+    processAssociation();
+  return ok;
+}
+
 bool GSModule::setDhcp(bool enable, const char *hostname)
 {
   if (hostname)

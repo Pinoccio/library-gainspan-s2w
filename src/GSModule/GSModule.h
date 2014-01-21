@@ -121,10 +121,7 @@ public:
    * TODO: Double quotes and backslashes in the passphrase should be
    * backslash-escaped
    */
-  bool associate(const char *ssid, const char *bssid = NULL, uint8_t channel = 0, bool best_rssi = true)
-  {
-    return writeCommandCheckOk("AT+WA=\"%s\",%s,%d,%d", ssid, bssid ?: "", channel, best_rssi);
-  }
+  bool associate(const char *ssid, const char *bssid = NULL, uint8_t channel = 0, bool best_rssi = true);
 
   /**
    * Set DHCP status and hostname.
