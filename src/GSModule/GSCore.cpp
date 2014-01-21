@@ -1237,7 +1237,7 @@ bool GSCore::processAsync()
 
 void GSCore::processDeassociation()
 {
-  this->associated = true;
+  this->associated = false;
   for (cid_t cid = 0; cid <= MAX_CID; ++cid) {
     if (this->connections[cid].connected) {
       this->connections[cid].error = true;
