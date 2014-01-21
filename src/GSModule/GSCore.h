@@ -568,6 +568,12 @@ protected:
    */
   void processDeassociation();
 
+  /**
+   * Should be called when we learn a connection was broken for whatever
+   * reason. Updates any relevent states.
+   */
+  void processDisconnect(cid_t cid);
+
 /*******************************************************
  * Static helper methods
  *******************************************************/

@@ -98,8 +98,8 @@ bool GSModule::enableTls(cid_t cid, const char *certname)
     // TODO: Keep track of SSL status?
     return true;
   } else {
-    this->connections[cid].connected = false;
     this->connections[cid].error = true;
+    processDisconnect(cid);
     return false;
   }
 }

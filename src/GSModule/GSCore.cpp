@@ -1172,10 +1172,7 @@ bool GSCore::processAsync()
         #endif
         this->connections[cid].error = true;
       }
-
-      this->connections[cid].connected = false;
-      if (cid == this->ncm_auto_cid)
-        this->ncm_auto_cid = INVALID_CID;
+      processDisconnect(cid);
       return true;
 
     default:
@@ -1241,13 +1238,19 @@ bool GSCore::processAsync()
 void GSCore::processDeassociation()
 {
   this->associated = true;
-  this->ncm_auto_cid = INVALID_CID;
   for (cid_t cid = 0; cid <= MAX_CID; ++cid) {
     if (this->connections[cid].connected) {
-      this->connections[cid].connected = false;
       this->connections[cid].error = true;
+      processDisconnect(cid);
     }
   }
+}
+
+void GSCore::processDisconnect(cid_t cid)
+{
+  this->connections[cid].connected = false;
+  if (cid == this->ncm_auto_cid)
+    this->ncm_auto_cid = INVALID_CID;
 }
 
 /*******************************************************
