@@ -120,8 +120,8 @@ bool GSModule::addCert(const char *certname, bool to_flash, const uint8_t *buf, 
 
 bool GSModule::setAutoConnectClient(const IPAddress &ip, uint16_t port, Protocol protocol)
 {
-  uint8_t buf[16];
-  snprintf((char*)buf, sizeof(buf), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
 
   return setAutoConnectClient(buf, port, protocol);
 }
