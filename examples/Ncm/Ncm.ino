@@ -13,6 +13,23 @@ GSModule gs;
 #define SSID "Foo"
 #define PASSPHRASE "Bar"
 
+static void onNcmConnect(void *data, GSCore::cid_t cid) {
+  ((Print*)data)->print("Event: NCM connected cid ");
+  ((Print*)data)->println(cid);
+}
+
+void onNcmDisconnect(void *data) {
+  ((Print*)data)->println("Event: NCM disconnected");
+}
+
+void onAssociate(void *data) {
+  ((Print*)data)->println("Event: Associated");
+}
+
+void onDisassociate(void *data) {
+  ((Print*)data)->println("Event: Disassociated");
+}
+
 void setup() {
   Serial.println("Gainspan Serial2Wifi demo");
   #ifdef VCC_ENABLE // For the Pinoccio scout
@@ -29,6 +46,14 @@ void setup() {
   // Use SPI at 2Mhz (GS1500 supports up to 3.5Mhz)
   SPI.setClockDivider(SPI_CLOCK_DIV8);
   SPI.begin();
+
+  // Set event handlers and let them print to Serial
+  gs.onNcmConnect = onNcmConnect;
+  gs.onNcmDisconnect = onNcmDisconnect;
+  gs.onAssociate = onAssociate;
+  gs.onDisassociate = onDisassociate;
+  gs.eventData = &Serial;
+
   gs.begin(7);
 
 #if defined(GS_INIT) || defined(GS_ONCE)
@@ -57,12 +82,14 @@ void setup() {
   while (!gs.isAssociated()) {
     Serial.println("Not associated yet, waiting...");
     delay(500);
+    gs.loop();
   }
 
   GSCore::cid_t cid;
   while ((cid = gs.getNcmCid()) == GSModule::INVALID_CID) {
     Serial.println("Not connected yet, waiting...");
     delay(500);
+    gs.loop();
   }
 
   Serial.println("Connected");
@@ -74,12 +101,14 @@ void setup() {
     int c = gs.readData(cid);
     if (c >= 0)
       Serial.write(c);
+    gs.loop();
   }
 
   Serial.println("setup() done");
 }
 
 void loop() {
+  gs.loop();
   // Allow interactive command sending
   int c = gs.readRaw();
   if (c >= 0)

@@ -57,6 +57,10 @@ static void dump_byte(const char *prefix, int c, bool newline = true) {
 GSCore::GSCore()
 {
   this->ss_pin = INVALID_PIN;
+  this->onNcmConnect = NULL;
+  this->onNcmDisconnect = NULL;
+  this->onAssociate = NULL;
+  this->onDisassociate = NULL;
 
   static_assert( max_for_type(__typeof__(rx_async_len)) >= sizeof(rx_async) - 1, "rx_async_len is too small for rx_async" );
   static_assert( max_for_type(rx_data_index_t) >= sizeof(rx_data) - 1, "rx_data_index_t is too small for rx_data" );
@@ -99,6 +103,7 @@ bool GSCore::_begin()
   this->spi_prev_was_esc = false;
   this->spi_xoff = false;
   this->ncm_auto_cid = INVALID_CID;
+  this->events = 0;
 
   // TODO: Query AT+NSTAT=? to see if we are aready connected (in case
   // the NCM already connected before we were initialized).
@@ -139,6 +144,22 @@ void GSCore::end()
     pinMode(this->ss_pin, INPUT);
   this->ss_pin = INVALID_PIN;
   this->data_ready_pin = INVALID_PIN;
+}
+
+void GSCore::loop()
+{
+  readAndProcessAsync();
+
+  if (this->onNcmDisconnect && (this->events & EVENT_NCM_DISCONNECTED))
+    this->onNcmDisconnect(this->eventData);
+  if (this->onNcmConnect && (this->events & EVENT_NCM_CONNECTED))
+    this->onNcmConnect(this->eventData, this->ncm_auto_cid);
+  if (this->onDisassociate && (this->events & EVENT_DISASSOCIATED))
+    this->onDisassociate(this->eventData);
+  if (this->onAssociate && (this->events & EVENT_ASSOCIATED))
+    this->onAssociate(this->eventData);
+
+  this->events = 0;
 }
 
 /*******************************************************
@@ -1209,7 +1230,7 @@ bool GSCore::processAsync()
         case GS_ASYNC_NWCONN_SUCCESS:
           // This means that the Network Connection Manager has
           // succesfully associated.
-          this->associated = true;
+          processAssociation();
           return true;
 
         case GS_ASYNC_ENOIP:
@@ -1230,8 +1251,24 @@ bool GSCore::processAsync()
   }
 }
 
+void GSCore::processAssociation()
+{
+  this->associated = true;
+  // Keep track of the associated event, even when there is already a
+  // disassociated event (since a re-associate should not go by
+  // unnoticed
+  this->events |= EVENT_ASSOCIATED;
+}
+
 void GSCore::processDisassociation()
 {
+  // If there is still an unprocessed association event, just cancel
+  // that.
+  if (this->events & EVENT_ASSOCIATED)
+    this->events &= ~EVENT_ASSOCIATED;
+  else
+    this->events |= EVENT_DISASSOCIATED;
+
   this->associated = false;
   for (cid_t cid = 0; cid <= MAX_CID; ++cid) {
     if (this->connections[cid].connected) {
@@ -1243,8 +1280,12 @@ void GSCore::processDisassociation()
 
 void GSCore::processConnect(cid_t cid, uint32_t remote_ip, uint16_t remote_port, uint16_t local_port, bool ncm)
 {
-  if (ncm)
+  if (ncm) {
     this->ncm_auto_cid = cid;
+    // Keep track of the associated event, even when there is already a
+    // disconnect event (since a reconnect should not go by unnoticed
+    this->events |= EVENT_NCM_CONNECTED;
+  }
 
   this->connections[cid].remote_ip = remote_ip;
   this->connections[cid].remote_port = remote_port;
@@ -1256,8 +1297,14 @@ void GSCore::processConnect(cid_t cid, uint32_t remote_ip, uint16_t remote_port,
 void GSCore::processDisconnect(cid_t cid)
 {
   this->connections[cid].connected = false;
-  if (cid == this->ncm_auto_cid)
+  if (cid == this->ncm_auto_cid) {
     this->ncm_auto_cid = INVALID_CID;
+    // If there is still an unprocessed connect event, just cancel that.
+    if (this->events & EVENT_NCM_CONNECTED)
+      this->events &= ~EVENT_NCM_CONNECTED;
+    else
+      this->events |= EVENT_NCM_DISCONNECTED;
+  }
 }
 
 /*******************************************************

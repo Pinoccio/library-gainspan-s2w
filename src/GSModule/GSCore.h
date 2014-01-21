@@ -93,6 +93,24 @@ public:
   static const uint8_t MAX_DATA_LINE_SIZE = 128;
 
 /*******************************************************
+ * Event handlers
+ *******************************************************/
+
+ /** Called when the NCM has set up a connection. */
+ void (*onNcmConnect)(void *data, cid_t cid);
+ /** Called when the connection created by the NCM was disconnected (for
+  *  any reason, including explicit disconnection). */
+ void (*onNcmDisconnect)(void *data);
+ /** Called when the module associates. */
+ void (*onAssociate)(void *data);
+ /** Called when the module disassociates (for any reason, including
+  *  explicit disassiation). */
+ void (*onDisassociate)(void *data);
+
+ /** Data passed to all event handlers */
+ void *eventData;
+
+/*******************************************************
  * Methods for setting up the module
  *******************************************************/
 
@@ -126,6 +144,20 @@ public:
    * Clean up this library (for example to switch from UART to SPI).
    */
   void end();
+
+  /**
+   * This method should be called regularly to process any pending data.
+   * All callbacks will be called from within this method as well.
+   *
+   * Normally, calling this from the main loop() function should be
+   * sufficient. However, whenever you are looping, waiting for the wifi
+   * module to change state, you should also call loop on every
+   * iteration. e.g.,
+   *
+   *    while (!gs.isAssociated())
+   *       gs.loop();
+   */
+  void loop();
 
 /*******************************************************
  * Methods for reading and writing data
@@ -563,6 +595,11 @@ protected:
   bool processAsync();
 
   /**
+   * Should be called when we learn we're associated.
+   */
+  void processAssociation();
+
+  /**
    * Should be called when we learn we're no longer associated.
    * Updates the association state and all connection states.
    */
@@ -707,6 +744,16 @@ protected:
   /** Escaped bytes are xored with this value */
   static const uint8_t SPI_ESC_XOR = 0x20;
 
+  enum {
+    EVENT_NONE = 0,
+    EVENT_NCM_CONNECTED = 1,
+    EVENT_NCM_DISCONNECTED = 2,
+    EVENT_ASSOCIATED = 4,
+    EVENT_DISASSOCIATED = 8,
+  };
+
+  /** Events that have been triggered but have not been handled yet. */
+  uint8_t events;
 };
 
 #endif // GS_CORE_H

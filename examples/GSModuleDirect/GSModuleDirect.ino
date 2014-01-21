@@ -58,8 +58,10 @@ void setup() {
   gs.setAuth(GSModule::GS_AUTH_NONE);
   gs.setSecurity(GSModule::GS_SECURITY_WPA_PSK);
   gs.setWpaPassphrase(PASSPHRASE);
-  while(!gs.associate(SSID))
+  while(!gs.associate(SSID)) {
     Serial.println("Association failed, retrying...");
+    gs.loop();
+  }
 
   Serial.println("Associated to " SSID);
 
@@ -69,6 +71,7 @@ void setup() {
   while ((cid = gs.connectTcp(ip, 80)) == GSModule::INVALID_CID) {
     Serial.println("Connection failed, retrying...");
     delay(500);
+    gs.loop();
   }
 
   Serial.print("Connected to ");
@@ -81,12 +84,14 @@ void setup() {
     int c = gs.readData(cid);
     if (c >= 0)
       Serial.write(c);
+    gs.loop();
   }
 
   Serial.println("setup() done");
 }
 
 void loop() {
+  gs.loop();
   // Allow interactive command sending
   int c = gs.readRaw();
   if (c >= 0)
