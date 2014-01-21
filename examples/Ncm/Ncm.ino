@@ -6,6 +6,9 @@ GSModule gs;
 // Run with this define to provision the network manager. Afterwards,
 // run without and just use the NCM settings already present.
 //#define GS_INIT
+// Alternatively, run with this define to use the NCM without
+// configuring it to auto-start.
+#define GS_ONCE
 
 #define SSID "Foo"
 #define PASSPHRASE "Bar"
@@ -28,7 +31,7 @@ void setup() {
   SPI.begin();
   gs.begin(7);
 
-#ifdef GS_INIT
+#if defined(GS_INIT) || defined(GS_ONCE)
   // Enable DHCP
   gs.setDhcp(true, "pinoccio");
 
@@ -42,9 +45,13 @@ void setup() {
   // TCP connect (google.com)
   IPAddress ip(173, 194, 65, 101);
   gs.setAutoConnectClient(ip, 80);
-  gs.setNcm(true, false, true);
+#if defined(GS_INIT)
+  gs.setNcm(/* enabled */ true, /* associate_only */ false, /* remember */ true);
   gs.saveProfile(0);
   gs.setDefaultProfile(0);
+#else
+  gs.setNcm(/* enabled */ true, /* associate_only */ false, /* remember */ false);
+#endif
 #endif
 
   while (!gs.isAssociated()) {
