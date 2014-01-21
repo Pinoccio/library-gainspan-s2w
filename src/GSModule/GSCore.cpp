@@ -1191,7 +1191,7 @@ bool GSCore::processAsync()
         case GS_ASYNC_DISASSO_EVT:
           // TODO: This means the wifi association has broken. Update our
           // state.
-          processDeassociation();
+          processDisassociation();
           return true;
 
         case GS_ASYNC_STBY_TMR_EVT:
@@ -1223,7 +1223,7 @@ bool GSCore::processAsync()
           // Connection Manager fails.
           // Afterwards, the hardware loses its address and does not
           // retry DHCP again.
-          processDeassociation();
+          processDisassociation();
           return true;
 
         default:
@@ -1235,7 +1235,7 @@ bool GSCore::processAsync()
   }
 }
 
-void GSCore::processDeassociation()
+void GSCore::processDisassociation()
 {
   this->associated = false;
   for (cid_t cid = 0; cid <= MAX_CID; ++cid) {

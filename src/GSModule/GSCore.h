@@ -566,7 +566,7 @@ protected:
    * Should be called when we learn we're no longer associated.
    * Updates the association state and all connection states.
    */
-  void processDeassociation();
+  void processDisassociation();
 
   /**
    * Should be called when we learn a connection was broken for whatever
