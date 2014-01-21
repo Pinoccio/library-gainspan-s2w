@@ -1137,15 +1137,10 @@ bool GSCore::processAsync()
         // CONNECT <CID>
         if (!parseNumber(&cid, &args[1], 1, 16))
           return false;
-        this->ncm_auto_cid = cid;
+
         // Set connection info, even though we really only know it's
         // connected
-        this->connections[cid].remote_ip = 0;
-        this->connections[cid].remote_port = 0;
-        this->connections[cid].local_port = 0;
-        this->connections[cid].error = 0;
-        this->connections[cid].connected = 1;
-
+        processConnect(cid, 0, 0, 0, true);
         return true;
       } else {
         // Incoming connection on a TCP server
@@ -1244,6 +1239,18 @@ void GSCore::processDisassociation()
       processDisconnect(cid);
     }
   }
+}
+
+void GSCore::processConnect(cid_t cid, uint32_t remote_ip, uint16_t remote_port, uint16_t local_port, bool ncm)
+{
+  if (ncm)
+    this->ncm_auto_cid = cid;
+
+  this->connections[cid].remote_ip = remote_ip;
+  this->connections[cid].remote_port = remote_port;
+  this->connections[cid].local_port = local_port;
+  this->connections[cid].error = false;
+  this->connections[cid].connected = true;
 }
 
 void GSCore::processDisconnect(cid_t cid)

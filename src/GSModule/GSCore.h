@@ -569,6 +569,12 @@ protected:
   void processDisassociation();
 
   /**
+   * Should be called when we learn a new connection was created. Any
+   * values that are unknown should be passed as 0.
+   */
+  void processConnect(cid_t cid, uint32_t remote_ip, uint16_t remote_port, uint16_t local_port, bool ncm);
+
+  /**
    * Should be called when we learn a connection was broken for whatever
    * reason. Updates any relevent states.
    */
