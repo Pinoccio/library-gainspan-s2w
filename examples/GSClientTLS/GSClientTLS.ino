@@ -13,13 +13,13 @@ static void print_line(const uint8_t *buf, uint16_t len, void *data) {
 
 
 void setup() {
+  Serial.begin(115200);
   Serial.println("Gainspan Serial2Wifi demo");
   #ifdef VCC_ENABLE // For the Pinoccio scout
   pinMode(VCC_ENABLE, OUTPUT);
   digitalWrite(VCC_ENABLE, HIGH);
   #endif
   delay(2000);
-  Serial.begin(115200);
 
   // Use an UART
   //Serial1.begin(115200);
