@@ -109,6 +109,23 @@ bool GSModule::timeSync(const IPAddress& server, uint8_t timeout, uint16_t inter
   return true;
 }
 
+static void parse_ip_response(const uint8_t *buf, uint16_t len, void *data)
+{
+  if (len < 3 || strncmp((const char*)buf, "IP:", 3) != 0)
+    return;
+  IPAddress *ip = (IPAddress*)data;
+  if (!GSCore::parseIpAddress(ip, (const char *)buf + 3, len - 3))
+    *ip = INADDR_NONE;
+}
+
+IPAddress GSModule::dnsLookup(const char *name)
+{
+  IPAddress result = INADDR_NONE;
+  writeCommand("AT+DNSLOOKUP=%s", name);
+  if (readResponse(parse_ip_response, &result) != GS_SUCCESS)
+    result = INADDR_NONE;
+  return result;
+}
 
 bool GSModule::enableTls(cid_t cid, const char *certname)
 {

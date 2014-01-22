@@ -243,6 +243,15 @@ public:
   bool timeSync(const IPAddress&, uint8_t timeout = 10, uint16_t interval = 0);
 
   /**
+   * Perform a DNS lookup.
+   *
+   * @param host     The hostname to look up.
+   * @returns The IP address for the given host. If the host was not
+   *          found, returns 0.0.0.0.
+   */
+  IPAddress dnsLookup(const char *name);
+
+  /**
    * Setup a new TCP connection to the given ip and port.
    *
    * @returns the cid of the new connection if succesful, INVALID_CID
