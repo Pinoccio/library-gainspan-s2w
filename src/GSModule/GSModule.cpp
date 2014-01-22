@@ -92,7 +92,7 @@ bool GSModule::disconnect(cid_t cid)
   return writeCommandCheckOk("AT+NCLOSE=%x", cid);
 }
 
-bool GSModule::timeSync(const IPAddress& server, uint8_t timeout, uint16_t interval)
+bool GSModule::timeSync(const IPAddress& server, uint16_t interval, uint8_t timeout)
 {
   uint8_t buf[16];
   snprintf((char*)buf, sizeof(buf), "%d.%d.%d.%d", server[0], server[1], server[2], server[3]);

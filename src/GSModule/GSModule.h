@@ -234,13 +234,13 @@ public:
    * non-zero, more syncs are performed every interval seconds.
    *
    * @param server    The address of an NTP server to use.
-   * @param timeout   The number of seconds to wait for the server's response.
    * @param interval  The number of seconds before doing another time
    *                  sync (or 0 for only a one-off timesync).
+   * @param timeout   The number of seconds to wait for the server's response.
    *
    * @returns true when the time sync was succesful, false otherwise.
    */
-  bool timeSync(const IPAddress&, uint8_t timeout = 10, uint16_t interval = 0);
+  bool timeSync(const IPAddress&, uint16_t interval = 0, uint8_t timeout = 10);
 
   /**
    * Perform a DNS lookup.
