@@ -152,12 +152,12 @@ void GSCore::loop()
 
   if (this->onNcmDisconnect && (this->events & EVENT_NCM_DISCONNECTED))
     this->onNcmDisconnect(this->eventData);
-  if (this->onNcmConnect && (this->events & EVENT_NCM_CONNECTED))
-    this->onNcmConnect(this->eventData, this->ncm_auto_cid);
   if (this->onDisassociate && (this->events & EVENT_DISASSOCIATED))
     this->onDisassociate(this->eventData);
   if (this->onAssociate && (this->events & EVENT_ASSOCIATED))
     this->onAssociate(this->eventData);
+  if (this->onNcmConnect && (this->events & EVENT_NCM_CONNECTED))
+    this->onNcmConnect(this->eventData, this->ncm_auto_cid);
 
   this->events = 0;
 }
