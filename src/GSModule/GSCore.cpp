@@ -150,16 +150,22 @@ void GSCore::loop()
 {
   readAndProcessAsync();
 
-  if (this->onNcmDisconnect && (this->events & EVENT_NCM_DISCONNECTED))
+  if (this->onNcmDisconnect && (this->events & EVENT_NCM_DISCONNECTED)) {
+    this->events &= ~EVENT_NCM_DISCONNECTED;
     this->onNcmDisconnect(this->eventData);
-  if (this->onDisassociate && (this->events & EVENT_DISASSOCIATED))
+  }
+  if (this->onDisassociate && (this->events & EVENT_DISASSOCIATED)) {
+    this->events &= ~EVENT_DISASSOCIATED;
     this->onDisassociate(this->eventData);
-  if (this->onAssociate && (this->events & EVENT_ASSOCIATED))
+  }
+  if (this->onAssociate && (this->events & EVENT_ASSOCIATED)) {
+    this->events &= ~EVENT_ASSOCIATED;
     this->onAssociate(this->eventData);
-  if (this->onNcmConnect && (this->events & EVENT_NCM_CONNECTED))
+  }
+  if (this->onNcmConnect && (this->events & EVENT_NCM_CONNECTED)) {
+    this->events &= ~EVENT_NCM_CONNECTED;
     this->onNcmConnect(this->eventData, this->ncm_auto_cid);
-
-  this->events = 0;
+  }
 }
 
 /*******************************************************
