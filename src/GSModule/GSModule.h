@@ -189,6 +189,143 @@ public:
     return writeCommandCheckOk("AT&Y%d", profile);
   }
 
+  enum GSParam {
+    /**
+     * The maximum amount of time allowed establishing the network
+     * connection in Auto Connect Mode. Measured in units of 10
+     * milliseconds. Allowed values: 1 to 65535 (but the TCP/IP stack
+     * limits the maximum timeout value). Default value: 1000 (10
+     * seconds). If the connection attempt is a TCP client connection,
+     * and TCP Connection Timeout below is less than Network Connection
+     * Timeout, the value of Network Connection Timeout will be ignored.
+     */
+    GS_PARAM_AUTO_CONNECT_TIMEOUT = 0,
+
+    /**
+     * The maximum amount of time allowed associating to the desired
+     * wireless network in Auto Connect Mode, in units of 10
+     * milliseconds.  Allowed values: 0 to 65535. Default value: 500 (5
+     * seconds).
+     */
+    GS_PARAM_AUTO_ASSOCIATE = 1,
+
+    /**
+     * The maximum amount of time allowed establishing a TCP client
+     * connection, in units of 10 milliseconds. Allowed values: 0 to
+     * 65535 (but the TCP/IP stack limits the maximum timeout value).
+     * Default value: 500 (5 seconds). Note that 0 corresponds to the
+     * default TCP/IP stack timeout (75 seconds).
+     */
+    GS_PARAM_TCP_CONNECT_TIMEOUT = 2,
+
+    /**
+     * Not currently supported by hardware.
+     */
+    GS_PARAM_ASSOCIATION_RETRY_COUNT = 3,
+
+    /**
+     * The maximum time for serial data sent in Auto Connect Mode to be
+     * buffered, in units of 10 milliseconds. Allowed values: 1 to 65535
+     * (but the amount of data is limited by available buffer size).
+     * Default value: 10 (100 ms).
+     */
+    GS_PARAM_NAGLE_WAIT_TIME = 4,
+
+    /**
+     * The maximum time for scanning in one radio channel, in units of
+     * milliseconds. Allowed values: 5 to 16000 (but at the high limit a
+     * 14- channel scan will consume 4 minutes). Default value: 150 (150
+     * ms).
+     */
+    GS_PARAM_SCAN_TIME = 5,
+
+    /**
+     * The time in period between each L4 connection retry with ncm auto
+     * in units of 10 milliseconds.  Default vale is 50 (500 msec).
+     */
+    GS_PARAM_L4_RETRY_PERIOD = 6,
+
+    /**
+     * The retry counts for L4 connection with ncm
+     * auto. Default value is 20.
+     */
+    GS_PARAM_L4_RETRY_COUNT = 7,
+  };
+
+  /**
+   * Set various (timeout) parameters (using the ATS command).
+   *
+   * @param param    The parameter to set
+   * @param value    The value to set it to
+   */
+  bool setParam(GSParam param, uint16_t value)
+  {
+    return writeCommandCheckOk("ATS%d=%d", param, value);
+  }
+
+  enum GSNcmParam {
+    /**
+     * CPU Wait Period (1 to 65355 msec, default is 1000 msec)
+     */
+    GS_NCM_CPU_WAIT = 0,
+
+    /**
+     * Power Save Period (not supported by hardware) (1 to 65355 msec, default is 1000 msec)
+     */
+    GS_NCM_POWER_SAVE = 1,
+
+    /**
+     * Known channel scan period (1 to 65355 msec, default is 1000 msec)
+     */
+    GS_NCM_KNOWN_CHANNEL_SCAN_PERIOD = 2,
+
+    /**
+     * Specific channels scan period(not supported) (1 to 65355 msec, default is 1000 msec)
+     */
+    GS_NCM_SPECIFIC_CHANNEL_SCAN_PERIOD = 3,
+
+    /**
+     * All Channel scan Period (1 to 65355 msec, default is 1000)
+     */
+    GS_NCM_ALL_CHANNEL_SCAN_PERIOD = 4,
+
+    /**
+     * L3 Connect Period (1 to 65355 msec, default is 1000 msec)
+     */
+    GS_NCM_L3_CONNECT_PERIOD = 5,
+
+    /**
+     * Known channel scan retry count (1 to 65355, default is 10)
+     */
+    GS_NCM_KNOWN_CHANNEL_SCAN_RETRY_COUNT = 8,
+
+    /**
+     * Specific channels scan retry count (not supported) (1 to 65355, default is 10)
+     */
+    GS_NCM_SPECIFIC_CHANNEL_SCAN_RETRY_COUNT = 9,
+
+    /**
+     * All Channel scan retry count (1 to 65355, default is 10)
+     */
+    GS_NCM_ALL_CHANNEL_SCAN_RETRY_COUNT = 10,
+
+    /**
+     * L3 Connect retry count (1 to 65355, default is 100)
+     */
+    GS_NCM_L3_CONNECT_RETRY_COUNT = 11,
+  };
+
+  /**
+   * Set various Network Connection Manager parameters.
+   *
+   * @param param    The parameter to set
+   * @param value    The value to set it to
+   */
+  bool setNcmParam(GSNcmParam param, uint16_t value)
+  {
+    return writeCommandCheckOk("AT+NCMAUTOCONF=%d,%d", param, value);
+  }
+
   /**
    * Perform TLS handshaking. Should be called after a connection is
    * opened, but before any data is sent. After this, all data sent will
