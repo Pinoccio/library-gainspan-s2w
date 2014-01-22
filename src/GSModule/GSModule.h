@@ -145,6 +145,17 @@ public:
   bool setStaticIp(const IPAddress& ip, const IPAddress& netmask, const IPAddress& gateway);
 
   /**
+   * Set the DNS servers to use.
+   *
+   * These servers are only used when DHCP is disabled.
+   *
+   * When associated and DHCP is disabled, the new configuration is
+   * applied immediately.
+   */
+  bool setDns(const IPAddress& dns1, const IPAddress& dns2);
+  bool setDns(const IPAddress& dns);
+
+  /**
    * Save the current settings (profile) to flash.
    *
    * @param profile The profile number in flash to use. Can be either 0

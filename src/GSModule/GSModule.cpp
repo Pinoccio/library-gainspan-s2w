@@ -68,6 +68,23 @@ bool GSModule::setStaticIp(const IPAddress& ip, const IPAddress& netmask, const 
   return writeCommandCheckOk("AT+NSET=%s,%s,%s", ip_buf, nm_buf, gw_buf);
 }
 
+bool GSModule::setDns(const IPAddress& dns1, const IPAddress& dns2)
+{
+  uint8_t buf1[16], buf2[16];
+  snprintf((char*)buf1, sizeof(buf1), "%d.%d.%d.%d", dns1[0], dns1[1], dns1[2], dns1[3]);
+  snprintf((char*)buf2, sizeof(buf2), "%d.%d.%d.%d", dns2[0], dns2[1], dns2[2], dns2[3]);
+
+  return writeCommandCheckOk("AT+DNSSET=%s,%s", buf1, buf2);
+}
+
+bool GSModule::setDns(const IPAddress& dns)
+{
+  uint8_t buf[16];
+  snprintf((char*)buf, sizeof(buf), "%d.%d.%d.%d", dns[0], dns[1], dns[2], dns[3]);
+
+  return writeCommandCheckOk("AT+DNSSET=%s", buf);
+}
+
 bool GSModule::disconnect(cid_t cid)
 {
   if (cid > MAX_CID)
