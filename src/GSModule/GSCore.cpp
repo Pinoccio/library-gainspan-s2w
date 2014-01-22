@@ -638,6 +638,36 @@ int GSCore::readRaw()
 }
 
 /*******************************************************
+ * Helper methods
+ *******************************************************/
+
+bool GSCore::parseIpAddress(IPAddress *ip, const char *str, uint16_t len)
+{
+  int i = 0;
+  const char *end = (len ? str + len : NULL);
+  for (const char *p = str; *p && (end == NULL || p < end); ++p) {
+    if (*p == '.') {
+      ++i;
+      if (i >= 4)
+        return false;
+
+      (*ip)[i] = 0;
+      continue;
+    }
+
+    if (*p < '0' || *p > '9')
+      return false;
+
+    if ((*ip)[i] >= 100 || ((*ip)[i] == 25 && *p > '5'))
+      return false;
+
+    (*ip)[i] *= 10;
+    (*ip)[i] += (*p - '0');
+  }
+  return true;
+}
+
+/*******************************************************
  * Internal helper methods
  *******************************************************/
 

@@ -29,6 +29,7 @@
 
 #include <stdint.h>
 #include <Stream.h>
+#include <IPAddress.h>
 
 // Output debugging info on error conditions
 #define GS_LOG_ERRORS
@@ -445,6 +446,23 @@ public:
    * readResponse() or readData().
    */
   int readRaw();
+
+/*******************************************************
+ * Helper methods
+ *******************************************************/
+
+  /**
+   * Parses a string containing an ip address.
+   *
+   * @param ip     The IPAddress in which to store the result. Will be
+   *               modified even when the parsing fails.
+   * @param str    The string to parse.
+   * @param len    The maximum number of bytes to read. When 0, reads up
+   *               to the first \0. When non-zero, reads up to the first
+   *               \0 or up to len bytes, whichever occurs first.
+   * @returns true when the parsing succeeded, false otherwise.
+   */
+  static bool parseIpAddress(IPAddress *ip, const char *str, uint16_t len = 0);
 
 /*******************************************************
  * Internal helper methods
