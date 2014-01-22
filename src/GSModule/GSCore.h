@@ -691,6 +691,19 @@ protected:
   bool spi_prev_was_esc;
 
   /**
+   * When no data_ready pin is available, this is the (lower 16 bits of)
+   * the microseconds timestamp when the last poll was done.
+   */
+  uint16_t spi_poll_time;
+
+  /**
+   * When no data_ready pin is available, we need to poll. Make sure
+   * that when readRaw() will stall for the full 64-byte poll at most
+   * once during this this number of microseconds (and if readRaw() is
+   * called often, it should never stall at all). */
+  static const uint16_t MINIMUM_POLL_INTERVAL = 10000;
+
+  /**
    * Buffer for an (incomplete) asynchronous response, received while no
    * command is pending. Always contains at most 1 line of data,
    * excluding all newline characters. Once the trailing newline is

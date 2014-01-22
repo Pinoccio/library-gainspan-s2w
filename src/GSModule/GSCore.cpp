@@ -104,6 +104,7 @@ bool GSCore::_begin()
   this->spi_xoff = false;
   this->ncm_auto_cid = INVALID_CID;
   this->events = 0;
+  this->spi_poll_time = micros() - MINIMUM_POLL_INTERVAL;
 
   // TODO: Query AT+NSTAT=? to see if we are aready connected (in case
   // the NCM already connected before we were initialized).
@@ -611,26 +612,60 @@ int GSCore::readRaw()
     if (this->data_ready_pin != INVALID_PIN && !digitalRead(this->data_ready_pin))
       return -1;
 
-    // If the data ready pin is high, the documentation says we should
-    // just keep reading until the pin goes low. In practice, it turns
-    // out that when the pin is high, we can still read idle bytes, so
-    // we should just keep reading until we get actual data. To prevent
-    // accidental deadlock when the module messes up, we stop trying if
-    // we keep reading idle bytes.
-    // It appears that when the module is idle, it nearly fills up its
-    // SPI buffer with 63 idle bytes, which stay in there even when real
-    // data becomes available. So whenever the data ready pin goes high,
-    // we first have to chew away 63 idle bytes before we get the real
-    // data. Using 64 tries should thus be a useful value.
-    //
-    // When we do not have a data ready pin available, we'll have to
-    // resort to polling. However, because of those 63 idle bytes, we'll
-    // have to read 64 idle bytes before we can be sure that there is
-    // really no data available. It's cumbersome, but it'll work...
-    // Since our callers might go to sleep or otherwise won't repeat a
-    // readRaw() call directly, we have to really be sure there is no
-    // data available before we return -1.
-    int tries = 64;
+    int tries;
+    if (this->data_ready_pin != INVALID_PIN) {
+      // If the data ready pin is high, the documentation says we should
+      // just keep reading until the pin goes low. In practice, it turns
+      // out that when the pin is high, we can still read idle bytes, so
+      // we should just keep reading until we get actual data. To
+      // prevent accidental deadlock when the module messes up, we stop
+      // trying if we keep reading idle bytes.
+      // It appears that when the module is idle, it nearly fills up its
+      // SPI buffer with 63 idle bytes, which stay in there even when
+      // real data becomes available. So whenever the data ready pin
+      // goes high, we first have to chew away 63 idle bytes before we
+      // get the real data. Using 64 tries should thus be a useful
+      // value.
+      tries = 64;
+    } else {
+      // When we do not have a data ready pin available, we'll have to
+      // resort to polling. However, because of those 63 idle bytes,
+      // we'll have to read 64 idle bytes before we can be sure that
+      // there is really no data available. It's cumbersome, but it'll
+      // work...
+      // Since our callers might go to sleep or otherwise won't repeat a
+      // readRaw() call directly, we have to really be sure there is no
+      // data available before we return -1.
+      //
+      // However, this can introduce a lot of overhead and since
+      // it's unlikely that new data is available when there wasn't any
+      // a few microseconds ago, we should be smart about when to do a
+      // full poll.
+      uint16_t new_time = micros();
+      uint16_t diff = new_time - this->spi_poll_time;
+      if (diff < MINIMUM_POLL_INTERVAL) {
+        // We recently did polling, so no need to do a full poll.
+        // However, we'll always read at least one byte, so that when we
+        // get called continously, new data can arrive before
+        // MINIMUM_POLL_INTERVAL has passed.
+        tries = 1;
+
+        // Update the the poll timestamp. even though we didn't do a
+        // full poll now, we read 1/64th of a full poll, so progress the
+        // timestamp by that amount (taking care to not progress it past
+        // the current timestamp).
+        if (diff < MINIMUM_POLL_INTERVAL / 64)
+          this->spi_poll_time = new_time;
+        else
+          this->spi_poll_time += (MINIMUM_POLL_INTERVAL / 64);
+      } else {
+        // We haven't done enough polling recently, so do a full poll
+        // now.
+        tries = 64;
+        this->spi_poll_time = new_time;
+      }
+    }
+
     do {
       c = processSpiSpecial(transferSpi(SPI_SPECIAL_IDLE));
     } while (c == -1 && --tries > 0);
