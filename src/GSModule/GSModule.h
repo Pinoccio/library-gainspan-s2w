@@ -174,7 +174,7 @@ public:
    */
   bool loadProfile(uint8_t profile)
   {
-    return writeCommandCheckOk("AT&W%d", profile);
+    return writeCommandCheckOk("ATZ%d", profile);
   }
 
   /**
@@ -186,7 +186,7 @@ public:
    */
   bool setDefaultProfile(uint8_t profile)
   {
-    return writeCommandCheckOk("ATZ%d", profile);
+    return writeCommandCheckOk("AT&Y%d", profile);
   }
 
   /**
