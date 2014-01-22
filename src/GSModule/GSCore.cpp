@@ -378,6 +378,7 @@ GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid
   uint16_t read = 0;
   uint16_t line_start = 0;
   bool dropped_data = false;
+  bool skip_line = false;
   GSResponse res;
   unsigned long start = millis();
   while(true) {
@@ -404,6 +405,20 @@ GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid
       // that's ok.
       if (read - line_start == 0)
         continue;
+
+      if (skip_line) {
+        // Data from this line has been dropped because the buffer was
+        // full, and it was too long for a response anyway, so further
+        // ignore this line.
+        skip_line = false;
+        // Remove the line from the buffer
+        read = line_start;
+        #ifdef GS_DUMP_LINES
+        SERIAL_PORT_MONITOR.println("< | Skipped uninteresting long line |");
+        #endif
+        continue;
+      }
+      skip_line = false;
 
       res = processResponseLine(buf + line_start, read - line_start, connect_cid);
 
@@ -439,6 +454,10 @@ GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid
         if (keep_data)
           dump_byte("Response buffer too small, dropped byte: ", c);
         #endif
+        // Make sure we won't try to parse the few bytes we have as a
+        // response.
+        skip_line = true;
+        dropped_data = true;
       } else {
         // The buffer is full, but we can't just discard the byte: It
         // might be part of the final response we're waiting for.
