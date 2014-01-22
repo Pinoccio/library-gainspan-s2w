@@ -302,7 +302,7 @@ bool GSCore::writeData(cid_t cid, const uint8_t *buf, uint16_t len)
     return writeData(cid, buf, 1400) && writeData(cid, buf + 1400, len - 1400);
 
   #ifdef GS_DUMP_LINES
-  SERIAL_PORT_MONITOR.print("Writing bulk data frame for cid ");
+  SERIAL_PORT_MONITOR.print(">>| Writing bulk data frame for cid ");
   SERIAL_PORT_MONITOR.print(cid);
   SERIAL_PORT_MONITOR.print(" containing ");
   SERIAL_PORT_MONITOR.print(len);
@@ -357,7 +357,7 @@ void GSCore::writeCommand(const char *fmt, va_list args)
   }
 
   #ifdef GS_DUMP_LINES
-  SERIAL_PORT_MONITOR.print("> ");
+  SERIAL_PORT_MONITOR.print(">>= ");
   SERIAL_PORT_MONITOR.write(buf, len);
   SERIAL_PORT_MONITOR.println();
   #endif
@@ -420,7 +420,7 @@ GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid
         // Remove the line from the buffer
         read = line_start;
         #ifdef GS_DUMP_LINES
-        SERIAL_PORT_MONITOR.println("< | Skipped uninteresting long line |");
+        SERIAL_PORT_MONITOR.println("<<| Skipped uninteresting long line");
         #endif
         continue;
       }
@@ -531,13 +531,13 @@ bool GSCore::readDataResponse()
 
     if (this->rx_state == GS_RX_ESC && c == 'O') {
       #ifdef GS_DUMP_LINES
-      SERIAL_PORT_MONITOR.println("Read data OK response");
+      SERIAL_PORT_MONITOR.println("<<| Read data OK response");
       #endif
       this->rx_state = GS_RX_IDLE;
       return true;
     } else if (this->rx_state == GS_RX_ESC && c == 'F') {
       #ifdef GS_DUMP_LINES
-      SERIAL_PORT_MONITOR.println("Read data FAIL response");
+      SERIAL_PORT_MONITOR.println("<<| Read data FAIL response");
       #endif
       this->rx_state = GS_RX_IDLE;
       return true;
@@ -569,7 +569,7 @@ void GSCore::writeRaw(const uint8_t *buf, uint16_t len)
   if (this->serial) {
     #ifdef GS_DUMP_BYTES
     for (uint16_t i = 0; i < len; ++i)
-      dump_byte(">> ", buf[i]);
+      dump_byte(">= ", buf[i]);
     #endif
     this->serial->write(buf, len);
   } else if (this->ss_pin) {
@@ -580,7 +580,7 @@ void GSCore::writeRaw(const uint8_t *buf, uint16_t len)
         processIncoming(processSpiSpecial(transferSpi(SPI_SPECIAL_IDLE)));
       } else {
         #ifdef GS_DUMP_BYTES
-        dump_byte(">> ", *buf);
+        dump_byte(">= ", *buf);
         #endif
         if (isSpiSpecial(*buf)) {
           processIncoming(processSpiSpecial(transferSpi(SPI_SPECIAL_ESC)));
@@ -602,7 +602,7 @@ int GSCore::readRaw()
     c = this->serial->read();
     #ifdef GS_DUMP_BYTES
     if (c >= 0)
-      dump_byte("<< ", c);
+      dump_byte("<= ", c);
     #endif
   } else if (this->ss_pin != INVALID_PIN) {
 
@@ -726,7 +726,7 @@ int GSCore::processSpiSpecial(uint8_t c)
   }
   #ifdef GS_DUMP_BYTES
   if (res >= 0)
-    dump_byte("<< ", res);
+    dump_byte("<= ", res);
   #endif
   return res;
 }
@@ -826,7 +826,7 @@ bool GSCore::processIncoming(int c)
             if (parseNumber(&this->head_frame.cid, this->rx_async, 1, 16) &&
                 parseNumber(&this->head_frame.length, this->rx_async + 1, 4, 10)) {
               #ifdef GS_DUMP_LINES
-              SERIAL_PORT_MONITOR.print("Read bulk data frame for cid ");
+              SERIAL_PORT_MONITOR.print("<<| Read bulk data frame for cid ");
               SERIAL_PORT_MONITOR.print(this->head_frame.cid);
               SERIAL_PORT_MONITOR.print(" containing ");
               SERIAL_PORT_MONITOR.print(this->head_frame.length);
@@ -848,7 +848,7 @@ bool GSCore::processIncoming(int c)
 
           case GS_RX_ESC_A:
             #ifdef GS_DUMP_LINES
-              SERIAL_PORT_MONITOR.print("Read async header: <ESC>A");
+              SERIAL_PORT_MONITOR.print("<<| Read async header: <ESC>A");
               SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
               SERIAL_PORT_MONITOR.println();
             #endif
@@ -871,7 +871,7 @@ bool GSCore::processIncoming(int c)
           case GS_RX_ASYNC:
             this->rx_state = GS_RX_IDLE;
             #ifdef GS_DUMP_LINES
-              SERIAL_PORT_MONITOR.print("Read async data: ");
+              SERIAL_PORT_MONITOR.print("<<| Read async data: ");
               SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
               SERIAL_PORT_MONITOR.println();
             #endif
@@ -1051,7 +1051,7 @@ GSCore::GSResponse GSCore::processResponseLine(const uint8_t* buf, uint8_t len, 
   // GS_UNKNOWN_RESPONSE assuming that it is just arbitrary data.
 
   #ifdef GS_DUMP_LINES
-  SERIAL_PORT_MONITOR.print("< ");
+  SERIAL_PORT_MONITOR.print("<<= ");
   SERIAL_PORT_MONITOR.write(buf, len);
   SERIAL_PORT_MONITOR.println();
   #endif
