@@ -240,7 +240,7 @@ public:
    *
    * @returns true when the time sync was succesful, false otherwise.
    */
-  bool timeSync(const IPAddress&, uint16_t interval = 0, uint8_t timeout = 10);
+  bool timeSync(const IPAddress&, uint32_t interval = 0, uint8_t timeout = 10);
 
   /**
    * Perform a DNS lookup.
