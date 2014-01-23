@@ -723,7 +723,7 @@ protected:
    * application).
    */
   uint8_t rx_data[RX_DATA_BUF_SIZE];
-  typedef uint8_t rx_data_index_t;
+  typedef uint16_t rx_data_index_t;
 
   /** Current state for the data stream read from the module */
   RXState rx_state;
