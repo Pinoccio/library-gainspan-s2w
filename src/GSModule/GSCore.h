@@ -677,7 +677,7 @@ protected:
   static const uint8_t MAX_ASYNC_RESPONSE_SIZE = 27;
 
   // TODO: How big should this buffer be?
-  static const uint16_t RX_DATA_BUF_SIZE = 128;
+  static const uint16_t RX_DATA_BUF_SIZE = 512;
 
   /** The serial port to use, in serial mode */
   Stream *serial;
