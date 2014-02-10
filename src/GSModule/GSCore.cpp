@@ -61,6 +61,7 @@ GSCore::GSCore()
   this->onNcmDisconnect = NULL;
   this->onAssociate = NULL;
   this->onDisassociate = NULL;
+  this->initializing = false;
 
   static_assert( max_for_type(__typeof__(rx_async_len)) >= sizeof(rx_async) - 1, "rx_async_len is too small for rx_async" );
   static_assert( max_for_type(rx_data_index_t) >= sizeof(rx_data) - 1, "rx_data_index_t is too small for rx_data" );
@@ -77,8 +78,11 @@ bool GSCore::begin(Stream &serial)
   if (this->serial || this->ss_pin != INVALID_PIN)
     return false;
 
+  this->initializing = true;
   this->serial = &serial;
-  return _begin();
+  bool res = _begin();
+  this->initializing = false;
+  return res;
 }
 
 bool GSCore::begin(uint8_t ss, uint8_t data_ready)
@@ -86,13 +90,16 @@ bool GSCore::begin(uint8_t ss, uint8_t data_ready)
   if (this->serial || this->ss_pin != INVALID_PIN || ss == INVALID_PIN)
     return false;
 
+  this->initializing = true;
   this->ss_pin = ss;
   this->data_ready_pin = data_ready;
 
   pinMode(ss, OUTPUT);
   digitalWrite(ss, HIGH);
 
-  return _begin();
+  bool res = _begin();
+  this->initializing = false;
+  return res;
 }
 
 bool GSCore::_begin()
@@ -1311,7 +1318,12 @@ bool GSCore::processAsync()
         case GS_ASYNC_BOOT_UNEXPEC:
         case GS_ASYNC_BOOT_INTERNAL:
         case GS_ASYNC_BOOT_EXTERNAL:
-          // These indicate the hardware has just reset
+          // These indicate the hardware has just reset. During
+          // initialization, we expect one of these, so we silently
+          // ignore it.
+          if (this->initializing)
+            return true;
+
           // TODO: Reset our state to match the hardware. Also make sure
           // to stop waiting for a reply to a command, since it will never
           // come.

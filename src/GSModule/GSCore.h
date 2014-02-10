@@ -690,6 +690,9 @@ protected:
   /** When true, the previous SPI byte was an escape character */
   bool spi_prev_was_esc;
 
+  /** True when inside begin() */
+  bool initializing;
+
   /**
    * When no data_ready pin is available, this is the (lower 16 bits of)
    * the microseconds timestamp when the last poll was done.
