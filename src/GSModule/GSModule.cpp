@@ -51,6 +51,14 @@ bool GSModule::associate(const char *ssid, const char *bssid, uint8_t channel, b
   return ok;
 }
 
+bool GSModule::disassociate()
+{
+  bool ok = writeCommandCheckOk("AT+WD");
+  if (ok)
+    processDisassociation();
+  return ok;
+}
+
 bool GSModule::setDhcp(bool enable, const char *hostname)
 {
   if (hostname)

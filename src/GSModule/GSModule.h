@@ -124,6 +124,11 @@ public:
   bool associate(const char *ssid, const char *bssid = NULL, uint8_t channel = 0, bool best_rssi = true);
 
   /**
+   * Disassociate from the current network.
+   */
+  bool disassociate();
+
+  /**
    * Set DHCP status and hostname.
    *
    * When executing the command, the following happens:
