@@ -435,6 +435,11 @@ GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid
       skip_line = false;
 
       res = processResponseLine(buf + line_start, read - line_start, connect_cid);
+      // When we get a GS_LINK_LOST, we're apparently not associated
+      // when we thought we would be. Call processDisassciation() to fix
+      // that.
+      if (res == GS_LINK_LOST)
+        processDisassociation();
 
       if (keep_data && !callback && !dropped_data && res == GS_UNKNOWN_RESPONSE) {
         // Unknown response, so it's probably actual data that the
@@ -1355,6 +1360,12 @@ bool GSCore::processAsync()
 
 void GSCore::processAssociation()
 {
+  // Did we think we're still associated? Must have missed a
+  // disassciation somewhere (it seems the module doesn't always send
+  // them...). Process it now, to begin with a clean slate.
+  if (this->associated)
+    processDisassociation();
+
   this->associated = true;
   // Keep track of the associated event, even when there is already a
   // disassociated event (since a re-associate should not go by
@@ -1364,6 +1375,9 @@ void GSCore::processAssociation()
 
 void GSCore::processDisassociation()
 {
+  if (!this->associated)
+    return;
+
   // If there is still an unprocessed association event, just cancel
   // that.
   if (this->events & EVENT_ASSOCIATED)
@@ -1382,6 +1396,11 @@ void GSCore::processDisassociation()
 
 void GSCore::processConnect(cid_t cid, uint32_t remote_ip, uint16_t remote_port, uint16_t local_port, bool ncm)
 {
+  // Did we think this cid is still connected? We must have missed a
+  // disconnect somewhere.
+  if (this->connections[cid].connected)
+    processDisconnect(cid);
+
   if (ncm) {
     this->ncm_auto_cid = cid;
     // Keep track of the associated event, even when there is already a
@@ -1398,6 +1417,9 @@ void GSCore::processConnect(cid_t cid, uint32_t remote_ip, uint16_t remote_port,
 
 void GSCore::processDisconnect(cid_t cid)
 {
+  if (!this->connections[cid].connected)
+    return;
+
   this->connections[cid].connected = false;
   if (cid == this->ncm_auto_cid) {
     this->ncm_auto_cid = INVALID_CID;

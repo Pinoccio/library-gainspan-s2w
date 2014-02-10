@@ -170,4 +170,12 @@ bool GSModule::setAutoConnectServer(uint16_t port, Protocol protocol)
   return writeCommandCheckOk("AT+NAUTO=1,%d,,%d", protocol, port);
 }
 
+bool GSModule::setNcm(bool enabled, bool associate_only, bool remember, NCMMode mode)
+{
+  bool res = writeCommandCheckOk("AT+NCMAUTO=%d,%d,%d,%d", mode, enabled, !associate_only, !remember);
+  if (!enabled && res)
+    processDisassociation();
+  return res;
+}
+
 // vim: set sw=2 sts=2 expandtab:

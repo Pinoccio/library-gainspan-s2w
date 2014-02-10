@@ -514,10 +514,7 @@ public:
    *                        This should probably match the value set
    *                        through setAutoAssociate.
    */
-  bool setNcm(bool enabled, bool associate_only = true, bool remember = false, NCMMode mode = GS_NCM_STATION)
-  {
-    return writeCommandCheckOk("AT+NCMAUTO=%d,%d,%d,%d", mode, enabled, !associate_only, !remember);
-  }
+  bool setNcm(bool enabled, bool associate_only = true, bool remember = false, NCMMode mode = GS_NCM_STATION);
 };
 
 #endif // GS_MODULE_H
