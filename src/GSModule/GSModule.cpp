@@ -141,7 +141,7 @@ bool GSModule::enableTls(cid_t cid, const char *certname)
     return false;
 
   if (writeCommandCheckOk("AT+SSLOPEN=%x,%s", cid, certname)) {
-    // TODO: Keep track of SSL status?
+    this->connections[cid].ssl = true;
     return true;
   } else {
     this->connections[cid].error = true;

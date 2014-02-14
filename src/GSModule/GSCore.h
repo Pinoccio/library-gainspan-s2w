@@ -247,6 +247,8 @@ public:
   struct ConnectionInfo {
     /** Is this connection currently open? */
     bool connected : 1;
+    /** Is this connection an SSL socket */
+    bool ssl : 1;
     /**
      * When true, an error has occurred and data was likely lost (e.g., buffer
      * overflow or connection error). The connection might still be
