@@ -1,5 +1,5 @@
 /*
- * Arduino library for Gainspan Wifi2Serial modules
+ * Static assert without C++11
  *
  * Copyright (C) 2014 Matthijs Kooijman <matthijs@stdin.nl>
  *
@@ -26,30 +26,22 @@
 
 // This file defines some utility macros
 
-#ifndef GS_UTIL_H
-#define GS_UTIL_H
+#ifndef GS_STATIC_ASSERT_H
+#define GS_STATIC_ASSERT_H
 
-#include <limits.h>
+#if __cplusplus < 201103L && !defined(static_assert)
+// C++11 defines this nice static_assert declaration, but otherwise
+// emulate it (with less pretty error messages, but at least the checks
+// are being done).
+template<bool T> struct STATIC_ASSERTION;
+template<> struct STATIC_ASSERTION<true> {typedef int SUCCESS; };
 
-#define lengthof(x) (sizeof(x) / sizeof(*x))
+#define compiletime_concat(a, b) compiletime_concat2(a, b)
+#define compiletime_concat2(a, b) a ## b
+#define static_assert(condition, message) \
+  typedef typename STATIC_ASSERTION<(bool)(condition)>::SUCCESS compiletime_concat(static_assert_, __LINE__ ) __attribute__((__unused__))
+#endif // __cplusplus < 201103L && !defined(static_assert)
 
-// Macros to find the min and max value of a type. Based on macros in
-// the "limits" file in gcc / libstdc++.
-#define is_type_signed(T)     ((T)(-1) < 0)
-
-#define min_for_type(T) \
-  (is_type_signed (T) ? -max_for_type (T) - 1 : (T)0)
-
-#define max_for_type(T) \
-  (is_type_signed (T) ? \
-  (((((T)1 << (value_bits_for_type (T) - 1)) - 1) << 1) + 1) : \
-  (T)(~(T)0))
-
-#define value_bits_for_type(T) \
-  (sizeof(T) * __CHAR_BIT__ - is_type_signed (T))
-
-#define is_power_of_two(v) (v && ((v & (v-1)) == 0))
-
-#endif // GS_UTIL_H
+#endif // GS_STATIC_ASSERT_H
 
 // vim: set sw=2 sts=2 expandtab:
