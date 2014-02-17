@@ -66,7 +66,14 @@ uint8_t GSClient::connected()
 {
   if (this->cid == GSModule::INVALID_CID)
     return false;
-  return gs.getConnectionInfo(this->cid).connected && gs.getConnectionInfo(this->cid).ssl;
+  return gs.getConnectionInfo(this->cid).connected;
+}
+
+uint8_t GSClient::sslconnected()
+{
+  if (this->cid == GSModule::INVALID_CID)
+    return false;
+  return gs.getConnectionInfo(this->cid).ssl;
 }
 
 GSClient::operator bool()
