@@ -29,8 +29,6 @@
 #ifndef GS_UTIL_H
 #define GS_UTIL_H
 
-#include <limits.h>
-
 #define lengthof(x) (sizeof(x) / sizeof(*x))
 
 // Macros to find the min and max value of a type. Based on macros in
