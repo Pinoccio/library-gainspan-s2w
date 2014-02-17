@@ -28,6 +28,7 @@
 #include <Arduino.h>
 #include "GSCore.h"
 #include "util.h"
+#include "static_assert.h"
 
 #if defined(GS_DUMP_BYTES) || defined(GS_DUMP_SPI) || defined(GS_LOG_ERRORS) || defined(GS_LOG_ERRORS_VERBOSE)
 static void dump_byte(const char *prefix, int c, bool newline = true) {
