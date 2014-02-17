@@ -33,7 +33,7 @@ class GSClient : public Client {
     /****************************************************************
      * Gainspan-specific stuff
      ****************************************************************/
-    virtual uint8_t sslconnected();
+    virtual uint8_t sslConnected();
     virtual bool enableTls(const char *certname);
 
   protected:

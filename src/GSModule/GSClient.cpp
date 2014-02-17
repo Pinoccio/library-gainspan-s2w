@@ -69,7 +69,7 @@ uint8_t GSClient::connected()
   return gs.getConnectionInfo(this->cid).connected;
 }
 
-uint8_t GSClient::sslconnected()
+uint8_t GSClient::sslConnected()
 {
   if (this->cid == GSModule::INVALID_CID)
     return false;
