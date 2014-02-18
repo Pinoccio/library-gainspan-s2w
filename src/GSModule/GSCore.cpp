@@ -1422,6 +1422,7 @@ void GSCore::processDisconnect(cid_t cid)
     return;
 
   this->connections[cid].connected = false;
+  this->connections[cid].ssl = false;
   if (cid == this->ncm_auto_cid) {
     this->ncm_auto_cid = INVALID_CID;
     // If there is still an unprocessed connect event, just cancel that.
