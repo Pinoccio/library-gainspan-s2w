@@ -554,7 +554,7 @@ bool GSCore::readDataResponse()
       SERIAL_PORT_MONITOR.println("<<| Read data FAIL response");
       #endif
       this->rx_state = GS_RX_IDLE;
-      return true;
+      return false;
     } else {
       processIncoming(c);
     }
