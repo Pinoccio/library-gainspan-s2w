@@ -1008,27 +1008,23 @@ void GSCore::loadFrameHeader(RXFrame* frame)
 
 bool GSCore::getFrameHeader(cid_t cid)
 {
-  // Already have a valid frame header, nothing to do
-  if (this->tail_frame.length != 0)
-    return true;
-
-  if (cid != ANY_CID && this->tail_frame.cid != cid)
-    return false;
-
-  if (this->rx_data_tail != this->rx_data_head) {
-    // The current frame is empty, but there is still data in rx_data.
-    // Load the next frame.
-   loadFrameHeader(&this->tail_frame);
-  } else {
-    // The buffer is empty. See if we can read more data from the
-    // module.
-    while (this->tail_frame.length == 0) {
-      // Don't block
-      if (!processIncoming(readRaw()))
-        return false;
+  if (this->tail_frame.length == 0) {
+    if (this->rx_data_tail != this->rx_data_head) {
+      // The current frame is empty, but there is still data in rx_data.
+      // Load the next frame.
+     loadFrameHeader(&this->tail_frame);
+    } else {
+      // The buffer is empty. See if we can read more data from the
+      // module.
+      while (this->tail_frame.length == 0) {
+        // Don't block
+        if (!processIncoming(readRaw()))
+          return false;
+      }
     }
   }
-  return true;
+
+  return (cid == ANY_CID || this->tail_frame.cid == cid);
 }
 
 int GSCore::getData()
