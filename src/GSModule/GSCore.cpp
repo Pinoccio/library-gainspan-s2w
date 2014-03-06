@@ -225,6 +225,7 @@ size_t GSCore::readData(cid_t cid, uint8_t *buf, size_t size)
       len = size;
     memcpy(buf, &this->rx_data[this->rx_data_tail], len);
     this->rx_data_tail = (this->rx_data_tail + len) % sizeof(this->rx_data);
+    this->tail_frame.length -= len;
     // If the buffer isn't full yet, call ourselves again to read more
     // data:
     //  - From the start of the buffer if we read up to the end of rx_data
