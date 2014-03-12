@@ -1004,6 +1004,7 @@ void GSCore::loadFrameHeader(RXFrame* frame)
     this->rx_data_tail = 0;
   }
   memcpy(frame, &this->rx_data[this->rx_data_tail], sizeof(*frame));
+  this->rx_data_tail += sizeof(*frame);
 }
 
 bool GSCore::getFrameHeader(cid_t cid)
