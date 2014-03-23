@@ -867,10 +867,10 @@ bool GSCore::processIncoming(int c)
         #endif
       }
 
-      if (--this->rx_async_left == 0) {
-        // Finished reading the header or body, find out out what to do with it
-        switch(this->rx_state) {
-          case GS_RX_ESC_Z:
+      // Finished reading the header or body, find out out what to do with it
+      switch(this->rx_state) {
+        case GS_RX_ESC_Z:
+          if (--this->rx_async_left == 0) {
             // <CID><Data Length xxxx 4 ascii char><data>
             if (parseNumber(&this->head_frame.cid, this->rx_async, 1, 16) &&
                 parseNumber(&this->head_frame.length, this->rx_async + 1, 4, 10)) {
@@ -893,9 +893,11 @@ bool GSCore::processIncoming(int c)
               // Revert to GS_RX_IDLE and hope for the best...
               this->rx_state = GS_RX_IDLE;
             }
-            break;
+          }
+          break;
 
-          case GS_RX_ESC_A:
+        case GS_RX_ESC_A:
+          if (--this->rx_async_left == 0) {
             #ifdef GS_DUMP_LINES
               SERIAL_PORT_MONITOR.print("<<| Read async header: <ESC>A");
               SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
@@ -915,9 +917,11 @@ bool GSCore::processIncoming(int c)
               // Revert to GS_RX_IDLE and hope for the best...
               this->rx_state = GS_RX_IDLE;
             }
-            break;
+          }
+          break;
 
-          case GS_RX_ASYNC:
+        case GS_RX_ASYNC:
+          if (--this->rx_async_left == 0) {
             this->rx_state = GS_RX_IDLE;
             #ifdef GS_DUMP_LINES
               SERIAL_PORT_MONITOR.print("<<| Read async data: ");
@@ -936,11 +940,11 @@ bool GSCore::processIncoming(int c)
               #endif
             }
             break;
+          }
 
-          // keep the compiler happy
-          default:
-            break;
-        }
+        // keep the compiler happy
+        default:
+          break;
       }
       break;
 
