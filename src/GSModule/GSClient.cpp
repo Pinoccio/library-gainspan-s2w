@@ -27,25 +27,6 @@
 #include "GSClient.h"
 #include "util.h"
 
-int GSClient::connect(IPAddress ip, uint16_t port)
-{
-  if (connected())
-    return false;
-
-  GSModule::cid_t cid = gs.connectTcp(ip, port);
-  if (cid == GSModule::INVALID_CID)
-    return false;
-
-  this->cid = cid;
-  return true;
-}
-
-int GSClient::connect(const char *host, uint16_t port)
-{
-  // TODO
-  return false;
-}
-
 size_t GSClient::write(uint8_t c)
 {
   return write(&c, sizeof(c));
@@ -95,13 +76,6 @@ uint8_t GSClient::connected()
   return gs.getConnectionInfo(this->cid).connected;
 }
 
-uint8_t GSClient::sslConnected()
-{
-  if (this->cid == GSModule::INVALID_CID)
-    return false;
-  return gs.getConnectionInfo(this->cid).connected && gs.getConnectionInfo(this->cid).ssl;
-}
-
 GSClient::operator bool()
 {
   return (this->cid != GSModule::INVALID_CID);
@@ -113,8 +87,4 @@ GSClient& GSClient::operator =(GSCore::cid_t cid)
   return *this;
 }
 
-bool GSClient::enableTls(const char *certname)
-{
-  return gs.enableTls(this->cid, certname);
-}
 // vim: set sw=2 sts=2 expandtab:

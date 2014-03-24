@@ -410,6 +410,19 @@ public:
   int connectTcp(const IPAddress& ip, uint16_t port);
 
   /**
+   * Setup a new UDP "connection" to the given ip and port.
+   *
+   * Since UDP is a connectionless protocol, this doesn't actually
+   * transmit any data, but it sets up a cid inside the gainspan module
+   * with the given info. Any data written with writeData will be sent
+   * using this info. Every writeData call results in a single packet.
+   *
+   * @returns the cid of the new connection if succesful, INVALID_CID
+   * otherwise.
+   */
+  int connectUdp(const IPAddress& ip, uint16_t port, uint16_t localport = 0);
+
+  /**
    * Disconnect a connection.
    *
    * @param cid The cid to read data for. Can be an invalid cid, will

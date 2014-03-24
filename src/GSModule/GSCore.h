@@ -231,6 +231,9 @@ public:
   /**
    * Write connection data for the given cid.
    *
+   * If the cid is a UDP client connection, every call to writeData
+   * generates a single UDP packet.
+   *
    * @param cid    The cid to write data to. Can be an invalid cid, will
    *               return 0 then.
    * @param buf    The data to send.

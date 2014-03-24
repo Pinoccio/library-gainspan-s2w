@@ -24,42 +24,31 @@
  * SOFTWARE.
  */
 
-#ifndef _GS_CLIENT_H
-#define _GS_CLIENT_H
+#ifndef _GS_TCP_CLIENT_H
+#define _GS_TCP_CLIENT_H
 
-#include <Arduino.h>
-#include <Client.h>
+#include "GSClient.h"
 
-#include "GSModule.h"
-
-class GSClient : public Client {
+class GSTcpClient : public  GSClient {
   public:
-    GSClient(GSModule &gs) : gs(gs), cid(GSModule::INVALID_CID) { } ;
+    GSTcpClient(GSModule &gs) : GSClient(gs) { } ;
 
     /****************************************************************
-     * Stuff from Client / Stream / Print
+     * Stuff from Client that is not implemented by GSClient yet
      ****************************************************************/
-    virtual size_t write(uint8_t);
-    virtual size_t write(const uint8_t *buf, size_t size);
-    virtual int available();
-    virtual int read();
-    virtual int read(uint8_t *buf, size_t size);
-    virtual int peek();
-    virtual void flush();
-    virtual void stop();
-    virtual uint8_t connected();
-    virtual operator bool();
-    GSClient& operator =(GSCore::cid_t cid);
+    virtual int connect(IPAddress ip, uint16_t port);
+    virtual int connect(const char *host, uint16_t port);
 
-    // Include other overloads of write
-    using Print::write;
 
-  protected:
-    GSModule &gs;
-    GSModule::cid_t cid;
+    /****************************************************************
+     * Gainspan-specific stuff
+     ****************************************************************/
+    virtual uint8_t sslConnected();
+    virtual bool enableTls(const char *certname);
 
+    // Explicitely inherit operator=, since the default assignment
+    // operator shows it.
+    using GSClient::operator=;
 };
 
-#endif // _GS_CLIENT_H
-
-// vim: set sw=2 sts=2 expandtab:
+#endif // _GS_TCP_CLIENT_H

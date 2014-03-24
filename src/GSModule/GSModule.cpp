@@ -43,6 +43,22 @@ int GSModule::connectTcp(const IPAddress& ip, uint16_t port)
   return cid;
 }
 
+int GSModule::connectUdp(const IPAddress& ip, uint16_t port, uint16_t local_port)
+{
+  uint8_t buf[16];
+  snprintf((char*)buf, sizeof(buf), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+  writeCommand("AT+NCUDP=%s,%d", buf, port);
+  cid_t cid = INVALID_CID;
+  if (readResponse(&cid) != GS_SUCCESS || cid > MAX_CID)
+    return INVALID_CID;
+
+  // TODO: Until https://github.com/arduino/Arduino/pull/1798 is merged,
+  // we have to remove the constness here.
+  processConnect(cid, const_cast<IPAddress&>(ip), port, local_port, false);
+
+  return cid;
+}
+
 bool GSModule::associate(const char *ssid, const char *bssid, uint8_t channel, bool best_rssi)
 {
   bool ok = writeCommandCheckOk("AT+WA=\"%s\",%s,%d,%d", ssid, bssid ?: "", channel, best_rssi);
