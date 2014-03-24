@@ -36,9 +36,7 @@ int GSModule::connectTcp(const IPAddress& ip, uint16_t port)
   if (readResponse(&cid) != GS_SUCCESS || cid > MAX_CID)
     return INVALID_CID;
 
-  // TODO: Until https://github.com/arduino/Arduino/pull/1798 is merged,
-  // we have to remove the constness here.
-  processConnect(cid, const_cast<IPAddress&>(ip), port, 0, false);
+  processConnect(cid, ip, port, 0, false);
 
   return cid;
 }
@@ -52,9 +50,7 @@ int GSModule::connectUdp(const IPAddress& ip, uint16_t port, uint16_t local_port
   if (readResponse(&cid) != GS_SUCCESS || cid > MAX_CID)
     return INVALID_CID;
 
-  // TODO: Until https://github.com/arduino/Arduino/pull/1798 is merged,
-  // we have to remove the constness here.
-  processConnect(cid, const_cast<IPAddress&>(ip), port, local_port, false);
+  processConnect(cid, ip, port, local_port, false);
 
   return cid;
 }
