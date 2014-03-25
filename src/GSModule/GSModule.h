@@ -95,7 +95,7 @@ public:
    */
   bool setWepPassphrase(const char *passphrase)
   {
-    return writeCommandCheckOk("AT+WWEP1=\"%s\"", passphrase);
+    return writeCommandCheckOk("AT+WWEP1=%s", passphrase);
   }
 
   /**
