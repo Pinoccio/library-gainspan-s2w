@@ -744,6 +744,7 @@ int GSCore::readRaw()
 
 bool GSCore::parseIpAddress(IPAddress *ip, const char *str, uint16_t len)
 {
+  *ip = (uint32_t)0;
   int i = 0;
   const char *end = (len ? str + len : NULL);
   for (const char *p = str; *p && (end == NULL || p < end); ++p) {
