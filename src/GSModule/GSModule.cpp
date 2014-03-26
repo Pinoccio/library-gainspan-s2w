@@ -27,7 +27,7 @@
 #include "GSModule.h"
 #include "util.h"
 
-int GSModule::connectTcp(const IPAddress& ip, uint16_t port)
+GSCore::cid_t GSModule::connectTcp(const IPAddress& ip, uint16_t port)
 {
   uint8_t buf[16];
   snprintf((char*)buf, sizeof(buf), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
@@ -41,7 +41,7 @@ int GSModule::connectTcp(const IPAddress& ip, uint16_t port)
   return cid;
 }
 
-int GSModule::connectUdp(const IPAddress& ip, uint16_t port, uint16_t local_port)
+GSCore::cid_t GSModule::connectUdp(const IPAddress& ip, uint16_t port, uint16_t local_port)
 {
   uint8_t buf[16];
   snprintf((char*)buf, sizeof(buf), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);

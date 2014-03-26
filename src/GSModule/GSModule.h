@@ -407,7 +407,7 @@ public:
    * @returns the cid of the new connection if succesful, INVALID_CID
    * otherwise.
    */
-  int connectTcp(const IPAddress& ip, uint16_t port);
+  cid_t connectTcp(const IPAddress& ip, uint16_t port);
 
  /**
   * Setup a listening UDP server on the given port.
@@ -428,7 +428,7 @@ public:
    * @returns the cid of the new connection if succesful, INVALID_CID
    * otherwise.
    */
-  int connectUdp(const IPAddress& ip, uint16_t port, uint16_t localport = 0);
+  cid_t connectUdp(const IPAddress& ip, uint16_t port, uint16_t localport = 0);
 
   /**
    * Disconnect a connection.
