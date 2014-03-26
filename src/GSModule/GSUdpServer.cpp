@@ -80,7 +80,10 @@ int GSUdpServer::beginPacket(const char *host, uint16_t port)
 
 int GSUdpServer::endPacket()
 {
-  return this->gs.writeData(this->cid, this->tx_ip, this->tx_port, this->tx_buf, this->tx_len);
+  int res = this->gs.writeData(this->cid, this->tx_ip, this->tx_port, this->tx_buf, this->tx_len);
+  free(this->tx_buf);
+  this->tx_buf = NULL;
+  return res;
 }
 
 size_t GSUdpServer::write(uint8_t c)
