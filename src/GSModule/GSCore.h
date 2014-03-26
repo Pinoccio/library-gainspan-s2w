@@ -255,11 +255,11 @@ public:
    * generates a single UDP packet.
    *
    * @param cid    The cid to write data to. Can be an invalid cid, will
-   *               return 0 then.
+   *               return false then.
    * @param buf    The data to send.
    * @param len    The number of bytes to send.
    *
-   * @returns wether the data could be succesfully written.
+   * @returns whether the data could be succesfully written.
    */
   bool writeData(cid_t cid, const uint8_t *buf, uint16_t len);
 
