@@ -409,6 +409,14 @@ public:
    */
   int connectTcp(const IPAddress& ip, uint16_t port);
 
+ /**
+  * Setup a listening UDP server on the given port.
+  *
+  * @returns the cid of the new socket if succesful, INVALID_CID
+  * otherwise.
+  */
+ cid_t listenUdp(uint16_t port);
+
   /**
    * Setup a new UDP "connection" to the given ip and port.
    *

@@ -55,6 +55,18 @@ int GSModule::connectUdp(const IPAddress& ip, uint16_t port, uint16_t local_port
   return cid;
 }
 
+GSCore::cid_t GSModule::listenUdp(uint16_t port)
+{
+  writeCommand("AT+NSUDP=%u",port);
+  cid_t cid = INVALID_CID;
+  if (readResponse(&cid) != GS_SUCCESS || cid > MAX_CID)
+    return INVALID_CID;
+
+  processConnect(cid, 0, 0, port, false);
+
+  return cid;
+}
+
 bool GSModule::associate(const char *ssid, const char *bssid, uint8_t channel, bool best_rssi)
 {
   bool ok = writeCommandCheckOk("AT+WA=\"%s\",%s,%d,%d", ssid, bssid ?: "", channel, best_rssi);
