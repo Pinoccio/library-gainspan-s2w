@@ -91,6 +91,14 @@ public:
   }
 
   /**
+   * Set the WEP passhrase to use.
+   */
+  bool setWepPassphrase(const char *passphrase)
+  {
+    return writeCommandCheckOk("AT+WWEP1=%s", passphrase);
+  }
+
+  /**
    * Set the WPA / WPA2 PSK passhrase to use and precalculate the PSK.
    * The PSK is always calculated from the SSID and the passphrase and
    * this command allows it to be precalculated. If later connecting to
