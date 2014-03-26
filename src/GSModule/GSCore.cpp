@@ -340,6 +340,52 @@ bool GSCore::writeData(cid_t cid, const uint8_t *buf, uint16_t len)
   return false;
 }
 
+bool GSCore::writeData(cid_t cid, IPAddress ip, uint16_t port, const uint8_t *buf, uint16_t len)
+{
+  if (cid > MAX_CID)
+    return false;
+
+  // Hardware doesn't support more than 1400, according to SERIAL-TO-WIFI ADAPTER
+  // APPLICATION PROGRAMMING GUIDE, section 3.4.1 ("Bulk data Tx and Rx")
+  if (len > 1400)
+    return writeData(cid, buf, 1400) && writeData(cid, buf + 1400, len - 1400);
+
+  uint8_t ipbuf[16];
+  snprintf((char*)ipbuf, sizeof(ipbuf), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+
+  #ifdef GS_DUMP_LINES
+  SERIAL_PORT_MONITOR.print(">>| Writing UDP server bulk data frame for cid ");
+  SERIAL_PORT_MONITOR.print(cid);
+  SERIAL_PORT_MONITOR.print(" to ");
+  SERIAL_PORT_MONITOR.print((const char*)ipbuf);
+  SERIAL_PORT_MONITOR.print(":");
+  SERIAL_PORT_MONITOR.print(port);
+  SERIAL_PORT_MONITOR.print(" containing ");
+  SERIAL_PORT_MONITOR.print(len);
+  SERIAL_PORT_MONITOR.println(" bytes");
+  #endif
+
+  uint8_t header[28]; // Including a trailing 0 that snprintf insists to write
+  // TODO: Also support UDP server
+  size_t headerlen = snprintf((char*)header, sizeof(header), "\x1bY%x%s %u\t%04d", cid, ipbuf, port, len);
+
+  // First, write the escape sequence up to the cid. After this, the
+  // module responds with <ESC>O or <ESC>F.
+  writeRaw(header, 3);
+  if (!readDataResponse()) {
+    #ifdef GS_LOG_ERROR
+    SERIAL_PORT_MONITOR.println("Sending UDP server bulk data frame failed");
+    #endif
+    return false;
+  }
+
+  // Then, write the rest of the escape sequence
+  writeRaw(header + 3, headerlen - 3);
+  // And write the actual data
+  writeRaw(buf, len);
+  return false;
+}
+
 /*******************************************************
  * Methods for writing commands / reading replies
  *******************************************************/

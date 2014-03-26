@@ -273,6 +273,20 @@ public:
    */
   bool writeData(cid_t cid, const uint8_t *buf, uint16_t len);
 
+  /**
+   * Write a packet for the given UDP server cid.
+   *
+   * @param cid    The cid to write data to. Can be an invalid cid, will
+   *               return false then.
+   * @param ip     The IP address to send the packet to
+   * @param port   The port to send the packet to
+   * @param buf    The data to send.
+   * @param len    The number of bytes to send.
+   *
+   * @returns whether the data could be succesfully written.
+   */
+  bool writeData(cid_t cid, IPAddress ip, uint16_t port, const uint8_t *buf, uint16_t len);
+
 /*******************************************************
  * Methods for getting connection info
  *******************************************************/
