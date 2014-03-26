@@ -51,6 +51,8 @@ void setup() {
   }
 
   Serial.println("Associated to " SSID);
+  gs.writeCommand("AT+NSTAT=?");
+  gs.readResponse(print_line, &Serial);
 
   // UDP server
   GSUdpServer server(gs);
