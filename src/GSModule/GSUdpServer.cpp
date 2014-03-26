@@ -39,6 +39,17 @@ uint8_t GSUdpServer::begin(uint16_t port)
 
 int GSUdpServer::parsePacket()
 {
+  // If there are still bytes pending from the previous packet, drop
+  // them. If not all of them are directly available, don't block but
+  // instead leave the rest and return no valid packet yet, our caller
+  // will probably retry with another parsePacket call which will
+  // continue dropping bytes.
+  while(this->rx_frame.length) {
+    if (this->gs.readData(this->cid) < 0)
+      return 0;
+    --this->rx_frame.length;
+  }
+
   this->rx_frame = this->gs.getFrameHeader(this->cid);
   return this->rx_frame.length;
 }
