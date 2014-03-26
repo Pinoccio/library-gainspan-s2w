@@ -34,6 +34,7 @@ uint8_t GSUdpServer::begin(uint16_t port)
     return false;
 
   this->cid = cid;
+  this->rx_frame.length = 0;
   return true;
 }
 
