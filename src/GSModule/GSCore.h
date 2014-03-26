@@ -165,8 +165,18 @@ public:
  *******************************************************/
 
   struct RXFrame {
+    /* True for UDP server frames, false for TCP server, TCP client or
+     * UDP client (e.g., frame doesn't include IP address + port, those
+     * are fixed for the cid.
+     */
+    bool udp_server;
+
     cid_t cid;
     uint16_t length;
+    /* IP address for UDP server frames only */
+    IPAddress ip;
+    /* Port for UDP server frames only */
+    uint16_t port;
 
     operator bool() { return this->length > 0; }
   };
@@ -500,6 +510,12 @@ protected:
     GS_RX_ESC,
     /** Read an <esc>Z escape code, reading the rest of the sequence */
     GS_RX_ESC_Z,
+    /** Read an <esc>y escape code, reading ip address */
+    GS_RX_ESC_y_1,
+    /** Read an <esc>y escape code, reading port */
+    GS_RX_ESC_y_2,
+    /** Read an <esc>y escape code, reading length */
+    GS_RX_ESC_y_3,
     /** Reading bulk data */
     GS_RX_BULK,
     /** Read an <esc>A escape code, waiting for the rest of the sequence */
