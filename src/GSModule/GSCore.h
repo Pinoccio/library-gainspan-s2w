@@ -164,6 +164,26 @@ public:
  * Methods for reading and writing data
  *******************************************************/
 
+  struct RXFrame {
+    cid_t cid;
+    uint16_t length;
+
+    operator bool() { return this->length > 0; }
+  };
+
+  /**
+   * Get info about the current frame (or, after reading the last byte of a
+   * frame, the next frame), without blocking.
+   *
+   * @param cid    The cid the caller is interested in.
+   *
+   * @returns a pointer to the current frame if a frame was available
+   * and it contains data for the given cid (or cid is CID_ANY), or
+   * an empty frame (length == 0) when no frame is available or it is
+   * for the wrong cid.
+   */
+  RXFrame getFrameHeader(cid_t cid);
+
   /**
    * Read a single byte of data for the given cid, without removing it
    * from the buffer.
@@ -488,11 +508,6 @@ protected:
     GS_RX_ASYNC,
   };
 
-  struct RXFrame {
-    cid_t cid;
-    uint16_t length;
-  };
-
   /**
    * Setup function common for UART and SPI modes.
    */
@@ -540,18 +555,6 @@ protected:
    * rx_data is empty.
    */
   void loadFrameHeader(RXFrame *frame);
-
-  /**
-   * Get the next data frame into tail_frame, without blocking. The
-   * frame is loaded either from rx_data or by querying the module.
-   *
-   * @param cid    The cid the caller is interested in.
-   *
-   * @returns true if a frame was available and it contains data for the
-   * given cid (or cid is CID_ANY), or false when no frame is available
-   * or it is for the wrong cid.
-   */
-  bool getFrameHeader(cid_t cid);
 
   /**
    * Get the next data byte, without blocking. The frame is loaded

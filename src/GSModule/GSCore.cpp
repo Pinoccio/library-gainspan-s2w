@@ -1011,7 +1011,7 @@ void GSCore::loadFrameHeader(RXFrame* frame)
   this->rx_data_tail += sizeof(*frame);
 }
 
-bool GSCore::getFrameHeader(cid_t cid)
+GSCore::RXFrame GSCore::getFrameHeader(cid_t cid)
 {
   if (this->tail_frame.length == 0) {
     if (this->rx_data_tail != this->rx_data_head) {
@@ -1024,12 +1024,15 @@ bool GSCore::getFrameHeader(cid_t cid)
       while (this->tail_frame.length == 0) {
         // Don't block
         if (!processIncoming(readRaw()))
-          return false;
+          return RXFrame();
       }
     }
   }
 
-  return (cid == ANY_CID || this->tail_frame.cid == cid);
+  if (cid == ANY_CID || this->tail_frame.cid == cid)
+    return this->tail_frame;
+  else
+    return RXFrame();
 }
 
 int GSCore::getData()
