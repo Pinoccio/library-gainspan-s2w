@@ -61,7 +61,7 @@ IPAddress GSUdpServer::remoteIP()
 
 uint16_t GSUdpServer::remotePort()
 {
-  return this->rx_frame.ip;
+  return this->rx_frame.port;
 }
 
 int GSUdpServer::beginPacket(IPAddress ip, uint16_t port)
