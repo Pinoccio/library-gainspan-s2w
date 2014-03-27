@@ -60,7 +60,7 @@ void setup() {
     Serial.println("Bind failed");
 
   // Wait for a single UDP packet
-  size_t len;
+  size_t len=0;
   while (!len)
    len = server.parsePacket();
 
