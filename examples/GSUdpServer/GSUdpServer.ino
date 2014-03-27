@@ -78,6 +78,10 @@ void setup() {
     gs.loop();
   }
 
+  server.beginPacket(server.remoteIP(),server.remotePort());
+  server.write("sup\n",4);
+  server.endPacket();
+  
   Serial.println("setup() done");
 }
 
