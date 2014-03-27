@@ -1,2 +1,4 @@
 #include "GSModule/GSModule.h"
-#include "GSModule/GSClient.h"
+#include "GSModule/GSTcpClient.h"
+#include "GSModule/GSUdpClient.h"
+#include "GSModule/GSUdpServer.h"

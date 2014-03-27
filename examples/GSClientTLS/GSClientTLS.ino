@@ -61,7 +61,7 @@ void setup() {
   gs.timeSync(IPAddress(217, 77, 132, 1));
 
   // TCP connect (google.com)
-  GSClient client(gs);
+  GSTcpClient client(gs);
   IPAddress ip(173, 194, 65, 101);
   while (!client.connect(ip, 443) ||
          !client.enableTls("geotrust")) {

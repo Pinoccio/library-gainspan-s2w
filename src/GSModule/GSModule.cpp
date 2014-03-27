@@ -27,7 +27,7 @@
 #include "GSModule.h"
 #include "util.h"
 
-int GSModule::connectTcp(const IPAddress& ip, uint16_t port)
+GSCore::cid_t GSModule::connectTcp(const IPAddress& ip, uint16_t port)
 {
   uint8_t buf[16];
   snprintf((char*)buf, sizeof(buf), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
@@ -36,9 +36,33 @@ int GSModule::connectTcp(const IPAddress& ip, uint16_t port)
   if (readResponse(&cid) != GS_SUCCESS || cid > MAX_CID)
     return INVALID_CID;
 
-  // TODO: Until https://github.com/arduino/Arduino/pull/1798 is merged,
-  // we have to remove the constness here.
-  processConnect(cid, const_cast<IPAddress&>(ip), port, 0, false);
+  processConnect(cid, ip, port, 0, false);
+
+  return cid;
+}
+
+GSCore::cid_t GSModule::connectUdp(const IPAddress& ip, uint16_t port, uint16_t local_port)
+{
+  uint8_t buf[16];
+  snprintf((char*)buf, sizeof(buf), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+  writeCommand("AT+NCUDP=%s,%d", buf, port);
+  cid_t cid = INVALID_CID;
+  if (readResponse(&cid) != GS_SUCCESS || cid > MAX_CID)
+    return INVALID_CID;
+
+  processConnect(cid, ip, port, local_port, false);
+
+  return cid;
+}
+
+GSCore::cid_t GSModule::listenUdp(uint16_t port)
+{
+  writeCommand("AT+NSUDP=%u",port);
+  cid_t cid = INVALID_CID;
+  if (readResponse(&cid) != GS_SUCCESS || cid > MAX_CID)
+    return INVALID_CID;
+
+  processConnect(cid, 0, 0, port, false);
 
   return cid;
 }

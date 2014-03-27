@@ -340,6 +340,55 @@ bool GSCore::writeData(cid_t cid, const uint8_t *buf, uint16_t len)
   return false;
 }
 
+bool GSCore::writeData(cid_t cid, IPAddress ip, uint16_t port, const uint8_t *buf, uint16_t len)
+{
+  if (cid > MAX_CID)
+    return false;
+
+  // Hardware doesn't support more than 1400, according to SERIAL-TO-WIFI ADAPTER
+  // APPLICATION PROGRAMMING GUIDE, section 3.4.1 ("Bulk data Tx and Rx")
+  if (len > 1400)
+    return writeData(cid, buf, 1400) && writeData(cid, buf + 1400, len - 1400);
+
+  uint8_t ipbuf[16];
+  snprintf((char*)ipbuf, sizeof(ipbuf), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+
+  #ifdef GS_DUMP_LINES
+  SERIAL_PORT_MONITOR.print(">>| Writing UDP server bulk data frame for cid ");
+  SERIAL_PORT_MONITOR.print(cid);
+  SERIAL_PORT_MONITOR.print(" to ");
+  SERIAL_PORT_MONITOR.print((const char*)ipbuf);
+  SERIAL_PORT_MONITOR.print(":");
+  SERIAL_PORT_MONITOR.print(port);
+  SERIAL_PORT_MONITOR.print(" containing ");
+  SERIAL_PORT_MONITOR.print(len);
+  SERIAL_PORT_MONITOR.println(" bytes");
+  #endif
+
+  uint8_t header[28]; // Including a trailing 0 that snprintf insists to write
+  // TODO: Also support UDP server
+  size_t headerlen = snprintf((char*)header, sizeof(header), "\x1bY%x%s:%u:%04d", cid, ipbuf, port, len);
+
+  // First, write the escape sequence up to the cid. After this, the
+  // module responds with <ESC>O or <ESC>F.
+  writeRaw(header, 3);
+  if (!readDataResponse()) {
+    #ifdef GS_LOG_ERROR
+    SERIAL_PORT_MONITOR.println("Sending UDP server bulk data frame failed");
+    #endif
+    return false;
+  }
+
+  // Then, write the rest of the escape sequence
+  writeRaw(header + 3, headerlen - 3);
+  // TODO: the rest of the header can trigger an <ESC>F reply (but no
+  // <ESC>O if everything is ok...)
+
+  // And write the actual data
+  writeRaw(buf, len);
+  return false;
+}
+
 /*******************************************************
  * Methods for writing commands / reading replies
  *******************************************************/
@@ -698,6 +747,7 @@ int GSCore::readRaw()
 
 bool GSCore::parseIpAddress(IPAddress *ip, const char *str, uint16_t len)
 {
+  *ip = (uint32_t)0;
   int i = 0;
   const char *end = (len ? str + len : NULL);
   for (const char *p = str; *p && (end == NULL || p < end); ++p) {
@@ -842,7 +892,9 @@ bool GSCore::processIncoming(int c)
         case 'y':
           // Incoming UDP server data
           // <Esc>y<CID><IP address><space><port><horizontal tab><Data Length xxxx 4 ascii char><data>
-          // TODO
+          this->rx_state = GS_RX_ESC_y_1;
+          this->rx_async_len = 0;
+          break;
           // fallthrough for now
         default:
           // Unknown escape sequence? Revert to GS_RX_IDLE and hope for
@@ -855,7 +907,9 @@ bool GSCore::processIncoming(int c)
           #endif
       }
       break;
-
+    case GS_RX_ESC_y_1:
+    case GS_RX_ESC_y_2:
+    case GS_RX_ESC_y_3:
     case GS_RX_ESC_Z:
     case GS_RX_ESC_A:
     case GS_RX_ASYNC:
@@ -867,13 +921,14 @@ bool GSCore::processIncoming(int c)
         #endif
       }
 
-      if (--this->rx_async_left == 0) {
-        // Finished reading the header or body, find out out what to do with it
-        switch(this->rx_state) {
-          case GS_RX_ESC_Z:
+      // Finished reading the header or body, find out out what to do with it
+      switch(this->rx_state) {
+        case GS_RX_ESC_Z:
+          if (--this->rx_async_left == 0) {
             // <CID><Data Length xxxx 4 ascii char><data>
             if (parseNumber(&this->head_frame.cid, this->rx_async, 1, 16) &&
                 parseNumber(&this->head_frame.length, this->rx_async + 1, 4, 10)) {
+              this->head_frame.udp_server = false;
               #ifdef GS_DUMP_LINES
               SERIAL_PORT_MONITOR.print("<<| Read bulk data frame for cid ");
               SERIAL_PORT_MONITOR.print(this->head_frame.cid);
@@ -893,9 +948,84 @@ bool GSCore::processIncoming(int c)
               // Revert to GS_RX_IDLE and hope for the best...
               this->rx_state = GS_RX_IDLE;
             }
-            break;
+          }
+          break;
 
-          case GS_RX_ESC_A:
+        case GS_RX_ESC_y_1:
+          if (c == ' ')
+            this->rx_state = GS_RX_ESC_y_2;
+
+          break;
+
+        case GS_RX_ESC_y_2:
+          if (c == '\t') {
+            this->rx_state = GS_RX_ESC_y_3;
+            this->rx_async_left = 4;
+          }
+          break;
+
+        case GS_RX_ESC_y_3:
+        {
+          if (--this->rx_async_left == 0) {
+            #ifdef GS_DUMP_LINES
+              SERIAL_PORT_MONITOR.print("<<| Read async header: <ESC>y");
+              SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
+              SERIAL_PORT_MONITOR.println();
+            #endif
+
+            // <cid><ip> <port>\t<length 4 ascii char><data>
+            uint8_t * const ipstart = this->rx_async + 1;
+            uint8_t iplen = 0;
+            while (ipstart[iplen] != ' ')
+              ++iplen;
+
+            uint8_t * const portstart = ipstart + iplen + 1;
+            uint8_t portlen = 0;
+            while (portstart[portlen] != '\t')
+              ++portlen;
+
+            uint8_t * const lengthstart = portstart + portlen + 1;
+
+            if (parseNumber(&this->head_frame.cid, this->rx_async, 1, 16) &&
+                parseIpAddress(&this->head_frame.ip, (char*)ipstart, iplen) &&
+                parseNumber(&this->head_frame.port, portstart, portlen, 10) &&
+                parseNumber(&this->head_frame.length, lengthstart, 4, 10)) {
+
+              // TODO: Documentation suggests that the <ESC>y reply is
+              // also used for UDP client connections using the
+              // broadcast address (255.255.255.255).
+              this->head_frame.udp_server = true;
+
+              #ifdef GS_DUMP_LINES
+              SERIAL_PORT_MONITOR.print("<<| Read bulk UDP server data frame for cid ");
+              SERIAL_PORT_MONITOR.print(this->head_frame.cid);
+              SERIAL_PORT_MONITOR.print(" from ");
+              SERIAL_PORT_MONITOR.write(ipstart, iplen);
+              SERIAL_PORT_MONITOR.print(":");
+              SERIAL_PORT_MONITOR.write(portstart, portlen);
+              SERIAL_PORT_MONITOR.print(" containing ");
+              SERIAL_PORT_MONITOR.print(this->head_frame.length);
+              SERIAL_PORT_MONITOR.println(" bytes");
+              #endif
+
+              // Store the frame header and prepare to read data
+              bufferFrameHeader(&this->head_frame);
+              this->rx_state = GS_RX_BULK;
+            } else {
+              #ifdef GS_LOG_ERRORS
+                SERIAL_PORT_MONITOR.print("Invalid escape sequence: <ESC>y");
+                SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
+                SERIAL_PORT_MONITOR.println();
+              #endif
+              // Revert to GS_RX_IDLE and hope for the best...
+              this->rx_state = GS_RX_IDLE;
+            }
+          }
+          break;
+        }
+
+        case GS_RX_ESC_A:
+          if (--this->rx_async_left == 0) {
             #ifdef GS_DUMP_LINES
               SERIAL_PORT_MONITOR.print("<<| Read async header: <ESC>A");
               SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
@@ -915,9 +1045,11 @@ bool GSCore::processIncoming(int c)
               // Revert to GS_RX_IDLE and hope for the best...
               this->rx_state = GS_RX_IDLE;
             }
-            break;
+          }
+          break;
 
-          case GS_RX_ASYNC:
+        case GS_RX_ASYNC:
+          if (--this->rx_async_left == 0) {
             this->rx_state = GS_RX_IDLE;
             #ifdef GS_DUMP_LINES
               SERIAL_PORT_MONITOR.print("<<| Read async data: ");
@@ -936,11 +1068,11 @@ bool GSCore::processIncoming(int c)
               #endif
             }
             break;
+          }
 
-          // keep the compiler happy
-          default:
-            break;
-        }
+        // keep the compiler happy
+        default:
+          break;
       }
       break;
 
@@ -1007,7 +1139,7 @@ void GSCore::loadFrameHeader(RXFrame* frame)
   this->rx_data_tail += sizeof(*frame);
 }
 
-bool GSCore::getFrameHeader(cid_t cid)
+GSCore::RXFrame GSCore::getFrameHeader(cid_t cid)
 {
   if (this->tail_frame.length == 0) {
     if (this->rx_data_tail != this->rx_data_head) {
@@ -1020,12 +1152,15 @@ bool GSCore::getFrameHeader(cid_t cid)
       while (this->tail_frame.length == 0) {
         // Don't block
         if (!processIncoming(readRaw()))
-          return false;
+          return RXFrame();
       }
     }
   }
 
-  return (cid == ANY_CID || this->tail_frame.cid == cid);
+  if (cid == ANY_CID || this->tail_frame.cid == cid)
+    return this->tail_frame;
+  else
+    return RXFrame();
 }
 
 int GSCore::getData()

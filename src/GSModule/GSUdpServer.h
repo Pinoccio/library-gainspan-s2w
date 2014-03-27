@@ -24,42 +24,61 @@
  * SOFTWARE.
  */
 
-#ifndef _GS_CLIENT_H
-#define _GS_CLIENT_H
+#ifndef _GS_UDP_SERVER_H
+#define _GS_UDP_SERVER_H
 
 #include <Arduino.h>
-#include <Client.h>
+#include <Udp.h>
 
 #include "GSModule.h"
 
-class GSClient : public Client {
+class GSUdpServer : public UDP {
   public:
-    GSClient(GSModule &gs) : gs(gs), cid(GSModule::INVALID_CID) { } ;
+    GSUdpServer(GSModule &gs) : gs(gs), cid(GSModule::INVALID_CID) { } ;
 
     /****************************************************************
-     * Stuff from Client / Stream / Print
+     * Stuff from Udp / Stream / Print
      ****************************************************************/
+
+    // udp specific calls based on http://arduino.cc/en/Tutorial/UDPSendReceiveString
+    virtual uint8_t begin(uint16_t port);
+    virtual int parsePacket(); // returns size, populates remoteX
+    virtual IPAddress remoteIP();
+    virtual uint16_t remotePort();
+    virtual int beginPacket(IPAddress ip, uint16_t port);
+    virtual int beginPacket(const char *host, uint16_t port);
+    virtual int endPacket();
+    virtual void stop();
+
     virtual size_t write(uint8_t);
     virtual size_t write(const uint8_t *buf, size_t size);
     virtual int available();
     virtual int read();
-    virtual int read(uint8_t *buf, size_t size);
+    virtual int read(char *buf, size_t size) { return read((unsigned char*)buf, size); };
+    virtual int read(unsigned char *buf, size_t size);
     virtual int peek();
     virtual void flush();
-    virtual void stop();
-    virtual uint8_t connected();
-    virtual operator bool();
-    GSClient& operator =(GSCore::cid_t cid);
 
     // Include other overloads of write
     using Print::write;
 
   protected:
     GSModule &gs;
-    GSModule::cid_t cid;
+    GSModule::cid_t cid = GSModule::INVALID_CID;
+    // Packet currently being received. When length is 0, the other
+    // fields might be invalid.
+    GSCore::RXFrame rx_frame = {0};
+
+    // IP and port of the packet being prepared for sending (if any)
+    IPAddress tx_ip = INADDR_NONE;
+    uint16_t tx_port = 0;
+    // Buffer into which we're accumulating the next packet.
+    uint8_t *tx_buf = NULL;
+    // Length of data in sendBuf
+    size_t tx_len = 0;
 
 };
 
-#endif // _GS_CLIENT_H
+#endif // _GS_UDP_SERVER_H
 
 // vim: set sw=2 sts=2 expandtab:

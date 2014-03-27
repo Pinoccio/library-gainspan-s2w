@@ -164,6 +164,36 @@ public:
  * Methods for reading and writing data
  *******************************************************/
 
+  struct RXFrame {
+    /* True for UDP server frames, false for TCP server, TCP client or
+     * UDP client (e.g., frame doesn't include IP address + port, those
+     * are fixed for the cid.
+     */
+    bool udp_server;
+
+    cid_t cid;
+    uint16_t length;
+    /* IP address for UDP server frames only */
+    IPAddress ip;
+    /* Port for UDP server frames only */
+    uint16_t port;
+
+    operator bool() { return this->length > 0; }
+  };
+
+  /**
+   * Get info about the current frame (or, after reading the last byte of a
+   * frame, the next frame), without blocking.
+   *
+   * @param cid    The cid the caller is interested in.
+   *
+   * @returns a pointer to the current frame if a frame was available
+   * and it contains data for the given cid (or cid is CID_ANY), or
+   * an empty frame (length == 0) when no frame is available or it is
+   * for the wrong cid.
+   */
+  RXFrame getFrameHeader(cid_t cid);
+
   /**
    * Read a single byte of data for the given cid, without removing it
    * from the buffer.
@@ -231,14 +261,31 @@ public:
   /**
    * Write connection data for the given cid.
    *
+   * If the cid is a UDP client connection, every call to writeData
+   * generates a single UDP packet.
+   *
    * @param cid    The cid to write data to. Can be an invalid cid, will
-   *               return 0 then.
+   *               return false then.
    * @param buf    The data to send.
    * @param len    The number of bytes to send.
    *
-   * @returns wether the data could be succesfully written.
+   * @returns whether the data could be succesfully written.
    */
   bool writeData(cid_t cid, const uint8_t *buf, uint16_t len);
+
+  /**
+   * Write a packet for the given UDP server cid.
+   *
+   * @param cid    The cid to write data to. Can be an invalid cid, will
+   *               return false then.
+   * @param ip     The IP address to send the packet to
+   * @param port   The port to send the packet to
+   * @param buf    The data to send.
+   * @param len    The number of bytes to send.
+   *
+   * @returns whether the data could be succesfully written.
+   */
+  bool writeData(cid_t cid, IPAddress ip, uint16_t port, const uint8_t *buf, uint16_t len);
 
 /*******************************************************
  * Methods for getting connection info
@@ -477,17 +524,18 @@ protected:
     GS_RX_ESC,
     /** Read an <esc>Z escape code, reading the rest of the sequence */
     GS_RX_ESC_Z,
+    /** Read an <esc>y escape code, reading ip address */
+    GS_RX_ESC_y_1,
+    /** Read an <esc>y escape code, reading port */
+    GS_RX_ESC_y_2,
+    /** Read an <esc>y escape code, reading length */
+    GS_RX_ESC_y_3,
     /** Reading bulk data */
     GS_RX_BULK,
     /** Read an <esc>A escape code, waiting for the rest of the sequence */
     GS_RX_ESC_A,
     /** Reading async data */
     GS_RX_ASYNC,
-  };
-
-  struct RXFrame {
-    cid_t cid;
-    uint16_t length;
   };
 
   /**
@@ -537,18 +585,6 @@ protected:
    * rx_data is empty.
    */
   void loadFrameHeader(RXFrame *frame);
-
-  /**
-   * Get the next data frame into tail_frame, without blocking. The
-   * frame is loaded either from rx_data or by querying the module.
-   *
-   * @param cid    The cid the caller is interested in.
-   *
-   * @returns true if a frame was available and it contains data for the
-   * given cid (or cid is CID_ANY), or false when no frame is available
-   * or it is for the wrong cid.
-   */
-  bool getFrameHeader(cid_t cid);
 
   /**
    * Get the next data byte, without blocking. The frame is loaded
