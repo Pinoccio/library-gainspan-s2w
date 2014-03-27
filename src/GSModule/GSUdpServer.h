@@ -64,18 +64,18 @@ class GSUdpServer : public UDP {
 
   protected:
     GSModule &gs;
-    GSModule::cid_t cid;
+    GSModule::cid_t cid = GSModule::INVALID_CID;
     // Packet currently being received. When length is 0, the other
     // fields might be invalid.
-    GSCore::RXFrame rx_frame;
+    GSCore::RXFrame rx_frame = {0};
 
     // IP and port of the packet being prepared for sending (if any)
-    IPAddress tx_ip;
-    uint16_t tx_port;
+    IPAddress tx_ip = INADDR_NONE;
+    uint16_t tx_port = 0;
     // Buffer into which we're accumulating the next packet.
-    uint8_t *tx_buf;
+    uint8_t *tx_buf = NULL;
     // Length of data in sendBuf
-    size_t tx_len;
+    size_t tx_len = 0;
 
 };
 
