@@ -381,6 +381,9 @@ bool GSCore::writeData(cid_t cid, IPAddress ip, uint16_t port, const uint8_t *bu
 
   // Then, write the rest of the escape sequence
   writeRaw(header + 3, headerlen - 3);
+  // TODO: the rest of the header can trigger an <ESC>F reply (but no
+  // <ESC>O if everything is ok...)
+
   // And write the actual data
   writeRaw(buf, len);
   return false;
@@ -988,6 +991,9 @@ bool GSCore::processIncoming(int c)
                 parseNumber(&this->head_frame.port, portstart, portlen, 10) &&
                 parseNumber(&this->head_frame.length, lengthstart, 4, 10)) {
 
+              // TODO: Documentation suggests that the <ESC>y reply is
+              // also used for UDP client connections using the
+              // broadcast address (255.255.255.255).
               this->head_frame.udp_server = true;
 
               #ifdef GS_DUMP_LINES
