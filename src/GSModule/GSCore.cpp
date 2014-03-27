@@ -337,7 +337,7 @@ bool GSCore::writeData(cid_t cid, const uint8_t *buf, uint16_t len)
   writeRaw(header + 3, sizeof(header) - 1 - 3);
   // And write the actual data
   writeRaw(buf, len);
-  return false;
+  return true;
 }
 
 bool GSCore::writeData(cid_t cid, IPAddress ip, uint16_t port, const uint8_t *buf, uint16_t len)
@@ -386,7 +386,7 @@ bool GSCore::writeData(cid_t cid, IPAddress ip, uint16_t port, const uint8_t *bu
 
   // And write the actual data
   writeRaw(buf, len);
-  return false;
+  return true;
 }
 
 /*******************************************************
