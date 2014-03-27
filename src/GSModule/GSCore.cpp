@@ -348,7 +348,7 @@ bool GSCore::writeData(cid_t cid, IPAddress ip, uint16_t port, const uint8_t *bu
   // Hardware doesn't support more than 1400, according to SERIAL-TO-WIFI ADAPTER
   // APPLICATION PROGRAMMING GUIDE, section 3.4.1 ("Bulk data Tx and Rx")
   if (len > 1400)
-    return writeData(cid, buf, 1400) && writeData(cid, buf + 1400, len - 1400);
+    return false;
 
   uint8_t ipbuf[16];
   snprintf((char*)ipbuf, sizeof(ipbuf), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
