@@ -367,7 +367,7 @@ bool GSCore::writeData(cid_t cid, IPAddress ip, uint16_t port, const uint8_t *bu
 
   uint8_t header[28]; // Including a trailing 0 that snprintf insists to write
   // TODO: Also support UDP server
-  size_t headerlen = snprintf((char*)header, sizeof(header), "\x1bY%x%s %u\t%04d", cid, ipbuf, port, len);
+  size_t headerlen = snprintf((char*)header, sizeof(header), "\x1bY%x%s:%u:%04d", cid, ipbuf, port, len);
 
   // First, write the escape sequence up to the cid. After this, the
   // module responds with <ESC>O or <ESC>F.
