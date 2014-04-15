@@ -74,8 +74,9 @@ int GSUdpServer::beginPacket(IPAddress ip, uint16_t port)
 
 int GSUdpServer::beginPacket(const char *host, uint16_t port)
 {
-  // TODO
-  return false;
+  if (!GSCore::parseIpAddress(&(this->tx_ip), host, strlen(host))) return false;
+  this->tx_port = port;
+  return true;
 }
 
 int GSUdpServer::endPacket()
