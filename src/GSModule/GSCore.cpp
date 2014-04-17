@@ -1279,6 +1279,17 @@ GSCore::GSResponse GSCore::processResponseLine(const uint8_t* buf, uint8_t len, 
 
       return code;
 
+    // This should normally be an asynchronous reply, but at least
+    // AT+NSUDP returns this (with a hardcoded cid argument of 0...)
+    // when binding the socket fails for some reason.
+    case GS_SOCK_FAIL:
+      // 2 bytes of arguments
+      if (arg_len != 2)
+        return GS_UNKNOWN_RESPONSE;
+
+      // Ignore the argument...
+      return code;
+
     // This is a reply to a connect command with an argument. Only
     // consider it a valid reply when we're expecting it.
     case GS_CON_SUCCESS:
@@ -1312,7 +1323,6 @@ GSCore::GSResponse GSCore::processResponseLine(const uint8_t* buf, uint8_t len, 
       if (arg_len > 0)
         return GS_UNKNOWN_RESPONSE;
       // fallthrough //
-    case GS_SOCK_FAIL:
     case GS_ECIDCLOSE:
       if (arg_len > 2)
         return GS_UNKNOWN_RESPONSE;
