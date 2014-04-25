@@ -84,6 +84,7 @@ int GSUdpServer::endPacket()
   int res = this->gs.writeData(this->cid, this->tx_ip, this->tx_port, this->tx_buf, this->tx_len);
   free(this->tx_buf);
   this->tx_buf = NULL;
+  this->tx_len = 0;
   return res;
 }
 
