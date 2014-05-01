@@ -58,6 +58,7 @@ class GSUdpServer : public UDP {
     virtual int read(unsigned char *buf, size_t size);
     virtual int peek();
     virtual void flush();
+    GSUdpServer& operator =(GSCore::cid_t cid);
 
     // Include other overloads of write
     using Print::write;

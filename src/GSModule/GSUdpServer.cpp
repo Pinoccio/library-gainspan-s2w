@@ -157,4 +157,10 @@ void GSUdpServer::stop()
   gs.disconnect(this->cid);
 }
 
+GSUdpServer& GSUdpServer::operator =(GSCore::cid_t cid)
+{
+  this->cid = cid;
+  return *this;
+}
+
 // vim: set sw=2 sts=2 expandtab:
