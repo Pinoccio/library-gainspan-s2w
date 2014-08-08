@@ -637,10 +637,12 @@ void GSCore::writeRaw(const uint8_t *buf, uint16_t len)
     #endif
     this->serial->write(buf, len);
   } else if (this->ss_pin) {
-    while (len) {
+    uint16_t tries = 1024; // max 1k per loop
+    while (len && tries > 0) {
       if (this->spi_xoff) {
         // Module sent XOFF, so send IDLE bytes until it reports it has
         // buffer space again.
+        tries--;
         processIncoming(processSpiSpecial(transferSpi(SPI_SPECIAL_IDLE)));
       } else {
         #ifdef GS_DUMP_BYTES
@@ -1193,7 +1195,8 @@ void GSCore::readAndProcessAsync()
   //  Note that we always read at least one byte, so if we start out in
   //  a data packet, we'll always advance it by one byte to prevent
   //  deadlocking ourselves.
-  while (processIncoming(readRaw())) {
+  uint16_t tries = 1024; // max 1k per loop
+  while (processIncoming(readRaw()) && tries-- > 0) {
     switch (this->rx_state) {
       case GS_RX_ESC_Z:
       case GS_RX_BULK:
