@@ -718,11 +718,11 @@ protected:
   static const uint16_t RX_DATA_BUF_SIZE = 512;
 
   /** The serial port to use, in serial mode */
-  Stream *serial;
+  Stream *serial = NULL;
   /** The slave select pin to use, in SPI mode */
   uint8_t ss_pin = INVALID_PIN;
   /** The data_ready pin to use, in SPI mode */
-  uint8_t data_ready_pin;
+  uint8_t data_ready_pin = INVALID_PIN;
   /** When true, the module has sent xoff */
   bool spi_xoff;
   /** When true, the previous SPI byte was an escape character */
