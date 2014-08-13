@@ -98,18 +98,18 @@ public:
  *******************************************************/
 
  /** Called when the NCM has set up a connection. */
- void (*onNcmConnect)(void *data, cid_t cid);
+ void (*onNcmConnect)(void *data, cid_t cid) = NULL;
  /** Called when the connection created by the NCM was disconnected (for
   *  any reason, including explicit disconnection). */
- void (*onNcmDisconnect)(void *data);
+ void (*onNcmDisconnect)(void *data) = NULL;
  /** Called when the module associates. */
- void (*onAssociate)(void *data);
+ void (*onAssociate)(void *data) = NULL;
  /** Called when the module disassociates (for any reason, including
   *  explicit disassiation). */
- void (*onDisassociate)(void *data);
+ void (*onDisassociate)(void *data) = NULL;
 
  /** Data passed to all event handlers */
- void *eventData;
+ void *eventData = NULL;
 
 /*******************************************************
  * Methods for setting up the module
@@ -720,7 +720,7 @@ protected:
   /** The serial port to use, in serial mode */
   Stream *serial;
   /** The slave select pin to use, in SPI mode */
-  uint8_t ss_pin;
+  uint8_t ss_pin = INVALID_PIN;
   /** The data_ready pin to use, in SPI mode */
   uint8_t data_ready_pin;
   /** When true, the module has sent xoff */
@@ -729,7 +729,7 @@ protected:
   bool spi_prev_was_esc;
 
   /** True when inside begin() */
-  bool initializing;
+  bool initializing = false;
 
   /**
    * When no data_ready pin is available, this is the (lower 16 bits of)

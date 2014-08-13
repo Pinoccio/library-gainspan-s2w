@@ -57,13 +57,6 @@ static void dump_byte(const char *prefix, int c, bool newline = true) {
 
 GSCore::GSCore()
 {
-  this->ss_pin = INVALID_PIN;
-  this->onNcmConnect = NULL;
-  this->onNcmDisconnect = NULL;
-  this->onAssociate = NULL;
-  this->onDisassociate = NULL;
-  this->initializing = false;
-
   static_assert( max_for_type(__typeof__(rx_async_len)) >= sizeof(rx_async) - 1, "rx_async_len is too small for rx_async" );
   static_assert( max_for_type(rx_data_index_t) >= sizeof(rx_data) - 1, "rx_data_index_t is too small for rx_data" );
   // Check that the buffer size is a power of two, which makes all
