@@ -107,9 +107,19 @@ public:
  /** Called when the module disassociates (for any reason, including
   *  explicit disassiation). */
  void (*onDisassociate)(void *data) = NULL;
+ /** Called when the module stops responding and needs a power cycle.
+  * This function should power cycle the module and call begin/end to
+  * restart the driver, or do a full reboot. */
+ void (*onUnrecoverableError)(void *data) = NULL;
 
  /** Data passed to all event handlers */
  void *eventData = NULL;
+
+  /**
+   * Did an unrecoverable error occur? If this is true, the module stops
+   * working and should be reset or powercycled.
+   */
+  bool unrecoverableError = false;
 
 /*******************************************************
  * Methods for setting up the module
@@ -382,7 +392,7 @@ public:
     // These codes are never emitted by the hardware, but used in the
     // code to comunicate between different parts of the code.
     GS_UNKNOWN_RESPONSE,
-    GS_RESPONSE_TIMEOUT,
+    GS_UNRECOVERABLE_ERROR,
   };
 
   /**

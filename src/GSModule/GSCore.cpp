@@ -128,6 +128,8 @@ bool GSCore::_begin()
       int c = readRaw();
       if (c != -1 && c != 0x80)
         break;
+      if (this->unrecoverableError)
+        return false;
     }
 
     if ((unsigned long)(millis() - start) > RESPONSE_TIMEOUT) {
@@ -177,10 +179,14 @@ void GSCore::end()
   // Make sure that queries on state still return something sane
   memset(this->connections, 0, sizeof(connections));
   this->associated = false;
+  unrecoverableError = false;
 }
 
 void GSCore::loop()
 {
+  if (this->unrecoverableError)
+    return;
+
   readAndProcessAsync();
 
   if (this->onNcmDisconnect && (this->events & EVENT_NCM_DISCONNECTED)) {
@@ -471,13 +477,19 @@ GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid
   GSResponse res;
   unsigned long start = millis();
   while(true) {
+    if (this->unrecoverableError)
+      return GS_UNRECOVERABLE_ERROR;
+
     int c = readRaw();
     if (c == -1) {
       if ((unsigned long)(millis() - start) > RESPONSE_TIMEOUT) {
         #ifdef GS_LOG_ERRORS
         SERIAL_PORT_MONITOR.println("Response timeout");
         #endif
-        return GS_RESPONSE_TIMEOUT;
+        // On a response timeout, our state will be (and probably stay)
+        // wrong. Flag an unrecoverable error.
+        this->unrecoverableError = true;
+        return GS_UNRECOVERABLE_ERROR;
       }
       continue;
     }
@@ -606,12 +618,17 @@ bool GSCore::readDataResponse()
   unsigned long start = millis();
   while(true) {
     int c = readRaw();
+    if (this->unrecoverableError)
+      return false;
 
     if (c == -1) {
       if ((unsigned long)(millis() - start) > RESPONSE_TIMEOUT) {
         #ifdef GS_LOG_ERRORS
         SERIAL_PORT_MONITOR.println("Data response timeout");
         #endif
+        // On a response timeout, our state will be (and probably stay)
+        // wrong. Flag an unrecoverable error.
+        this->unrecoverableError = true;
         return false;
       }
       continue;
@@ -655,6 +672,8 @@ uint8_t GSCore::transferSpi(uint8_t out)
 void GSCore::writeRaw(const uint8_t *buf, uint16_t len)
 {
   if (this->serial) {
+    if (this->unrecoverableError)
+      return;
     #ifdef GS_DUMP_BYTES
     for (uint16_t i = 0; i < len; ++i)
       dump_byte(">= ", buf[i]);
@@ -663,6 +682,8 @@ void GSCore::writeRaw(const uint8_t *buf, uint16_t len)
   } else if (this->ss_pin) {
     uint16_t tries = 1024; // max 1k per loop
     while (len && tries > 0) {
+      if (this->unrecoverableError)
+        return;
       if (this->spi_xoff) {
         // Module sent XOFF, so send IDLE bytes until it reports it has
         // buffer space again.
@@ -688,6 +709,8 @@ void GSCore::writeRaw(const uint8_t *buf, uint16_t len)
 int GSCore::readRaw()
 {
   int c;
+  if (this->unrecoverableError)
+    return -1;
   if (this->serial) {
     c = this->serial->read();
     #ifdef GS_DUMP_BYTES
@@ -804,6 +827,7 @@ bool GSCore::parseIpAddress(IPAddress *ip, const char *str, uint16_t len)
 
 int GSCore::processSpiSpecial(uint8_t c)
 {
+  static uint8_t errorcount = 0;
   int res = -1;
   if (this->spi_prev_was_esc) {
     // Previous byte was an escape byte, so unescape this byte but don't
@@ -811,12 +835,22 @@ int GSCore::processSpiSpecial(uint8_t c)
     this->spi_prev_was_esc = false;
     res = c ^ SPI_ESC_XOR;
   } else {
+    if (c != SPI_SPECIAL_ALL_ONE)
+      errorcount = 0;
     switch(c) {
       case SPI_SPECIAL_ALL_ONE:
         // TODO: Handle these? Flag an error? Wait for SPI_SPECIAL_ACK?
         #ifdef GS_LOG_ERRORS
         SERIAL_PORT_MONITOR.println("SPI 0xff?");
         #endif
+        // Flag an unrecoverable error after 20 successive 0xff reads.
+        // We've seen the gainspan module spewing 0xff (rather, dropping
+        // off the bus, probably) at random moments. Once this happens,
+        // it typically does not recover automatically.
+        if (++errorcount > 20) {
+          this->unrecoverableError = true;
+          errorcount = 0;
+        }
         break;
       case SPI_SPECIAL_ALL_ZERO:
         // TODO: Handle these? Flag an error? Wait for SPI_SPECIAL_ACK?
