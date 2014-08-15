@@ -97,23 +97,19 @@ public:
  * Event handlers
  *******************************************************/
 
- /** Called when the NCM has set up a connection. */
- void (*onNcmConnect)(void *data, cid_t cid) = NULL;
- /** Called when the connection created by the NCM was disconnected (for
-  *  any reason, including explicit disconnection). */
- void (*onNcmDisconnect)(void *data) = NULL;
- /** Called when the module associates. */
- void (*onAssociate)(void *data) = NULL;
- /** Called when the module disassociates (for any reason, including
-  *  explicit disassiation). */
- void (*onDisassociate)(void *data) = NULL;
- /** Called when the module stops responding and needs a power cycle.
-  * This function should power cycle the module and call begin/end to
-  * restart the driver, or do a full reboot. */
- void (*onUnrecoverableError)(void *data) = NULL;
+  /** Called when the NCM has set up a connection. */
+  void (*onNcmConnect)(void *data, cid_t cid) = NULL;
+  /** Called when the connection created by the NCM was disconnected (for
+   *  any reason, including explicit disconnection). */
+  void (*onNcmDisconnect)(void *data) = NULL;
+  /** Called when the module associates. */
+  void (*onAssociate)(void *data) = NULL;
+  /** Called when the module disassociates (for any reason, including
+   *  explicit disassiation). */
+  void (*onDisassociate)(void *data) = NULL;
 
- /** Data passed to all event handlers */
- void *eventData = NULL;
+  /** Data passed to all event handlers */
+  void *eventData = NULL;
 
   /**
    * Did an unrecoverable error occur? If this is true, the module stops
