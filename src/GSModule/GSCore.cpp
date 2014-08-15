@@ -173,6 +173,10 @@ void GSCore::end()
     pinMode(this->ss_pin, INPUT);
   this->ss_pin = INVALID_PIN;
   this->data_ready_pin = INVALID_PIN;
+
+  // Make sure that queries on state still return something sane
+  memset(this->connections, 0, sizeof(connections));
+  this->associated = false;
 }
 
 void GSCore::loop()
