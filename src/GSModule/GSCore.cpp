@@ -111,10 +111,37 @@ bool GSCore::_begin()
   // the NCM already connected before we were initialized).
   this->associated = false;
 
-  // Flush any serial data still buffered
-  while(readRaw() != -1) /* nothing */;
+  // The startup procedure is:
+  //  - Wait for the data_ready pin to go high
+  //  - Read the startup banner
+  uint32_t start = millis();
+  do {
+    if (this->data_ready_pin != INVALID_PIN) {
+      // Check the data_ready pin.
+      if (digitalRead(this->data_ready_pin) == HIGH)
+        break;
+    } else {
+      // If we do not have access to the pin, we just poll the SPI port
+      // instead. Note that after a reset, the module seems to send a
+      // bunch of 0xff and one 0x80 character, which we should ignore
+      // here as well.
+      int c = readRaw();
+      if (c != -1 && c != 0x80)
+        break;
+    }
 
-  // TODO: Do a reset?
+    if ((unsigned long)(millis() - start) > RESPONSE_TIMEOUT) {
+      #ifdef GS_LOG_ERRORS
+      SERIAL_PORT_MONITOR.println(F("Startup banner timeout"));
+      #endif
+      return false;
+    }
+  } while (true);
+
+  // When we get here, some data is available. We just clear out all of
+  // it (since checking the banner is tricky, there's a few different
+  // things that could be printed).
+  while(readRaw() != -1) /* nothing */;
 
   // Always start with disabling verbose mode, otherwise we won't be
   // able to interpret responses
