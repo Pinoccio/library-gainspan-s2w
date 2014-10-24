@@ -356,7 +356,7 @@ bool GSCore::writeData(cid_t cid, const uint8_t *buf, uint16_t len)
   // module responds with <ESC>O or <ESC>F.
   writeRaw(header, 3);
   if (!readDataResponse()) {
-    #ifdef GS_LOG_ERROR
+    #ifdef GS_LOG_ERRORS
     SERIAL_PORT_MONITOR.println("Sending bulk data frame failed");
     #endif
     return false;
@@ -403,7 +403,7 @@ bool GSCore::writeData(cid_t cid, IPAddress ip, uint16_t port, const uint8_t *bu
   // module responds with <ESC>O or <ESC>F.
   writeRaw(header, 3);
   if (!readDataResponse()) {
-    #ifdef GS_LOG_ERROR
+    #ifdef GS_LOG_ERRORS
     SERIAL_PORT_MONITOR.println("Sending UDP server bulk data frame failed");
     #endif
     return false;
