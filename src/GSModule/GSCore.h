@@ -31,23 +31,26 @@
 #include <Stream.h>
 #include <IPAddress.h>
 
+// NOTE: In addition to enable output here, an output target should also
+// be supplied at runtime by calling the setLogOutput method.
+
 // Output debugging info on error conditions
-#define GS_LOG_ERRORS
+const bool GS_LOG_ERRORS = true;
 
 // Output debugging info on things that are unhandled, but are also know
 // to happen in normal operation
-//#define GS_LOG_ERRORS_VERBOSE
+const bool GS_LOG_ERRORS_VERBOSE = false;
 
 // Dump full lines of I/O
-//#define GS_DUMP_LINES
+const bool GS_DUMP_LINES = true;
 
 // Dump individual hex bytes
-//#define GS_DUMP_BYTES
+const bool GS_DUMP_BYTES = false;
 
 // Dump raw bytes sent/received for every SPI transfer (including byte
 // stuffing and escaping), except when an idle byte is both sent and
 // received.
-//#define GS_DUMP_SPI
+const bool GS_DUMP_SPI = false;
 
 /**
  * This class allows talking to a Gainspan Serial2Wifi module. It's
@@ -165,6 +168,12 @@ public:
    *       gs.loop();
    */
   void loop();
+
+  /**
+   * Set the target for error and debug output. Pass NULL to disable
+   * (which is also the default).
+   */
+  void setLogOutput(Print *error, Print *debug) { this->error = error; this->debug = debug; }
 
 /*******************************************************
  * Methods for reading and writing data
@@ -832,6 +841,12 @@ protected:
 
   /** Events that have been triggered but have not been handled yet. */
   uint8_t events;
+
+  /** Where to send error output. Can be NULL to disable output. */
+  Print *error;
+
+  /** Where to send debug output. Can be NULL to disable output. */
+  Print *debug;
 };
 
 #endif // GS_CORE_H

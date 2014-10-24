@@ -30,26 +30,26 @@
 #include "util.h"
 #include "static_assert.h"
 
-#if defined(GS_DUMP_BYTES) || defined(GS_DUMP_SPI) || defined(GS_LOG_ERRORS) || defined(GS_LOG_ERRORS_VERBOSE)
-static void dump_byte(const char *prefix, int c, bool newline = true) {
-  if (c >= 0) {
-    SERIAL_PORT_MONITOR.print(prefix);
-    SERIAL_PORT_MONITOR.print("0x");
-    if (c < 0x10) SERIAL_PORT_MONITOR.print("0");
-    SERIAL_PORT_MONITOR.print(c, HEX);
+static void dump_byte(Print *p, const char *prefix, int c, bool newline = true) {
+  if (c >= 0 && p) {
+    p->print(prefix);
+    p->print("0x");
+    if (c < 0x10) p->print("0");
+    p->print(c, HEX);
     if (isprint(c)) {
-      SERIAL_PORT_MONITOR.print(" (");
-      SERIAL_PORT_MONITOR.write(c);
-      SERIAL_PORT_MONITOR.print(")");
+      p->print(" (");
+      p->write(c);
+      p->print(")");
     }
     if (newline)
-      SERIAL_PORT_MONITOR.println();
+      p->println();
     // Needed to work around some buffer overflow problem in a part of
     // the serial output.
-    SERIAL_PORT_MONITOR.flush();
+    // Disabled because of https://github.com/arduino/Arduino/pull/2387
+    // Is this even still needed?
+    //p->flush();
   }
 }
-#endif
 
 /*******************************************************
  * Methods for setting up the module
@@ -65,6 +65,8 @@ GSCore::GSCore()
   // definition) is divisible by the buffer size, which is needed to
   // guarantee proper negative wraparound.
   static_assert( is_power_of_two(sizeof(rx_data)), "rx_data size is not a power of two" );
+  this->debug = NULL;
+  this->error = NULL;
 }
 
 bool GSCore::begin(Stream &serial)
@@ -133,9 +135,8 @@ bool GSCore::_begin()
     }
 
     if ((unsigned long)(millis() - start) > RESPONSE_TIMEOUT) {
-      #ifdef GS_LOG_ERRORS
-      SERIAL_PORT_MONITOR.println(F("Startup banner timeout"));
-      #endif
+      if (GS_LOG_ERRORS && this->error)
+        this->error->println(F("Startup banner timeout"));
       return false;
     }
   } while (true);
@@ -341,13 +342,13 @@ bool GSCore::writeData(cid_t cid, const uint8_t *buf, uint16_t len)
   if (len > 1400)
     return writeData(cid, buf, 1400) && writeData(cid, buf + 1400, len - 1400);
 
-  #ifdef GS_DUMP_LINES
-  SERIAL_PORT_MONITOR.print(">>| Writing bulk data frame for cid ");
-  SERIAL_PORT_MONITOR.print(cid);
-  SERIAL_PORT_MONITOR.print(" containing ");
-  SERIAL_PORT_MONITOR.print(len);
-  SERIAL_PORT_MONITOR.println(" bytes");
-  #endif
+  if (GS_DUMP_LINES && this->debug) {
+    this->debug->print(">>| Writing bulk data frame for cid ");
+    this->debug->print(cid);
+    this->debug->print(" containing ");
+    this->debug->print(len);
+    this->debug->println(" bytes");
+  }
 
   uint8_t header[8]; // Including a trailing 0 that snprintf insists to write
   // TODO: Also support UDP server
@@ -356,9 +357,8 @@ bool GSCore::writeData(cid_t cid, const uint8_t *buf, uint16_t len)
   // module responds with <ESC>O or <ESC>F.
   writeRaw(header, 3);
   if (!readDataResponse()) {
-    #ifdef GS_LOG_ERRORS
-    SERIAL_PORT_MONITOR.println("Sending bulk data frame failed");
-    #endif
+    if (GS_LOG_ERRORS && this->error)
+      this->error->println("Sending bulk data frame failed");
     return false;
   }
 
@@ -383,17 +383,17 @@ bool GSCore::writeData(cid_t cid, IPAddress ip, uint16_t port, const uint8_t *bu
   uint8_t ipbuf[16];
   snprintf((char*)ipbuf, sizeof(ipbuf), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
 
-  #ifdef GS_DUMP_LINES
-  SERIAL_PORT_MONITOR.print(">>| Writing UDP server bulk data frame for cid ");
-  SERIAL_PORT_MONITOR.print(cid);
-  SERIAL_PORT_MONITOR.print(" to ");
-  SERIAL_PORT_MONITOR.print((const char*)ipbuf);
-  SERIAL_PORT_MONITOR.print(":");
-  SERIAL_PORT_MONITOR.print(port);
-  SERIAL_PORT_MONITOR.print(" containing ");
-  SERIAL_PORT_MONITOR.print(len);
-  SERIAL_PORT_MONITOR.println(" bytes");
-  #endif
+  if (GS_DUMP_LINES && this->debug) {
+    this->debug->print(">>| Writing UDP server bulk data frame for cid ");
+    this->debug->print(cid);
+    this->debug->print(" to ");
+    this->debug->print((const char*)ipbuf);
+    this->debug->print(":");
+    this->debug->print(port);
+    this->debug->print(" containing ");
+    this->debug->print(len);
+    this->debug->println(" bytes");
+  }
 
   uint8_t header[28]; // Including a trailing 0 that snprintf insists to write
   // TODO: Also support UDP server
@@ -403,9 +403,8 @@ bool GSCore::writeData(cid_t cid, IPAddress ip, uint16_t port, const uint8_t *bu
   // module responds with <ESC>O or <ESC>F.
   writeRaw(header, 3);
   if (!readDataResponse()) {
-    #ifdef GS_LOG_ERRORS
-    SERIAL_PORT_MONITOR.println("Sending UDP server bulk data frame failed");
-    #endif
+    if (GS_LOG_ERRORS && this->error)
+      this->error->println("Sending UDP server bulk data frame failed");
     return false;
   }
 
@@ -438,18 +437,18 @@ void GSCore::writeCommand(const char *fmt, va_list args)
   size_t len = vsnprintf((char*)buf, sizeof(buf) - 2, fmt, args);
   if (len > sizeof(buf) - 2) {
     len = sizeof(buf) - 2;
-    #ifdef GS_LOG_ERRORS
-      SERIAL_PORT_MONITOR.print("Command truncated: ");
-      SERIAL_PORT_MONITOR.write(buf, len);
-      SERIAL_PORT_MONITOR.println();
-    #endif
+    if (GS_LOG_ERRORS && this->error) {
+      this->error->print("Command truncated: ");
+      this->error->write(buf, len);
+      this->error->println();
+    }
   }
 
-  #ifdef GS_DUMP_LINES
-  SERIAL_PORT_MONITOR.print(">>= ");
-  SERIAL_PORT_MONITOR.write(buf, len);
-  SERIAL_PORT_MONITOR.println();
-  #endif
+  if (GS_DUMP_LINES && this->debug) {
+    this->debug->print(">>= ");
+    this->debug->write(buf, len);
+    this->debug->println();
+  }
 
   buf[len++] = '\r';
   buf[len++] = '\n';
@@ -483,9 +482,8 @@ GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid
     int c = readRaw();
     if (c == -1) {
       if ((unsigned long)(millis() - start) > RESPONSE_TIMEOUT) {
-        #ifdef GS_LOG_ERRORS
-        SERIAL_PORT_MONITOR.println("Response timeout");
-        #endif
+        if (GS_LOG_ERRORS && this->error)
+          this->error->println("Response timeout");
         // On a response timeout, our state will be (and probably stay)
         // wrong. Flag an unrecoverable error.
         this->unrecoverableError = true;
@@ -514,9 +512,8 @@ GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid
         skip_line = false;
         // Remove the line from the buffer
         read = line_start;
-        #ifdef GS_DUMP_LINES
-        SERIAL_PORT_MONITOR.println("<<| Skipped uninteresting long line");
-        #endif
+        if (GS_DUMP_LINES && this->debug)
+          this->debug->println("<<| Skipped uninteresting long line");
         continue;
       }
       skip_line = false;
@@ -556,10 +553,9 @@ GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid
       } else if ((read - line_start) >= MAX_RESPONSE_SIZE ) {
         // The buffer is full. However, the line is too long for a
         // response, so there is no danger in just discarding the byte.
-        #ifdef GS_LOG_ERRORS
-        if (keep_data)
-          dump_byte("Response buffer too small, dropped byte: ", c);
-        #endif
+        if (keep_data && GS_LOG_ERRORS && this->error)
+          dump_byte(this->error, "Response buffer too small, dropped byte: ", c);
+
         // Make sure we won't try to parse the few bytes we have as a
         // response.
         skip_line = true;
@@ -570,20 +566,16 @@ GSCore::GSResponse GSCore::readResponseInternal(uint8_t *buf, uint16_t* len, cid
         // Instead, drop the last byte of the previous line to make
         // room, and move any data in the current line accordingly.
         if (line_start > 0) {
-          #ifdef GS_LOG_ERRORS
-          if (keep_data)
-            dump_byte("Response buffer too small, removed byte: ", buf[line_start - 1]);
-          #endif
+          if (keep_data && GS_LOG_ERRORS && this->error)
+            dump_byte(this->error, "Response buffer too small, removed byte: ", buf[line_start - 1]);
           memmove(&buf[line_start - 1], &buf[line_start], (read - line_start));
           line_start--;
           buf[read] = c;
         } else {
           // line_start == 0 should only happen if len <
           // MAX_RESPONSE_SIZE, but better be safe than sorry.
-          #ifdef GS_LOG_ERRORS
-          if (keep_data)
-            dump_byte("Response buffer tiny? Dropped byte: ", c);
-          #endif
+          if (keep_data && GS_LOG_ERRORS && this->error)
+            dump_byte(this->error, "Response buffer tiny? Dropped byte: ", c);
         }
 
         // Once we threw away a byte of data, don't store any new ones
@@ -623,9 +615,8 @@ bool GSCore::readDataResponse()
 
     if (c == -1) {
       if ((unsigned long)(millis() - start) > RESPONSE_TIMEOUT) {
-        #ifdef GS_LOG_ERRORS
-        SERIAL_PORT_MONITOR.println("Data response timeout");
-        #endif
+        if (GS_LOG_ERRORS && this->error)
+          this->error->println("Data response timeout");
         // On a response timeout, our state will be (and probably stay)
         // wrong. Flag an unrecoverable error.
         this->unrecoverableError = true;
@@ -635,15 +626,13 @@ bool GSCore::readDataResponse()
     }
 
     if (this->rx_state == GS_RX_ESC && c == 'O') {
-      #ifdef GS_DUMP_LINES
-      SERIAL_PORT_MONITOR.println("<<| Read data OK response");
-      #endif
+      if (GS_DUMP_LINES && this->debug)
+        this->debug->println("<<| Read data OK response");
       this->rx_state = GS_RX_IDLE;
       return true;
     } else if (this->rx_state == GS_RX_ESC && c == 'F') {
-      #ifdef GS_DUMP_LINES
-      SERIAL_PORT_MONITOR.println("<<| Read data FAIL response");
-      #endif
+      if (GS_DUMP_LINES && this->debug)
+        this->debug->println("<<| Read data FAIL response");
       this->rx_state = GS_RX_IDLE;
       return false;
     } else {
@@ -660,12 +649,12 @@ uint8_t GSCore::transferSpi(uint8_t out)
   digitalWrite(this->ss_pin, LOW);
   uint8_t in = SPI.transfer(out);
   digitalWrite(this->ss_pin, HIGH);
-  #ifdef GS_DUMP_SPI
-  if (in != SPI_SPECIAL_IDLE || out != SPI_SPECIAL_IDLE) {
-    dump_byte("SPI: >> ", out, false);
-    dump_byte(" << ", in);
+  if (GS_DUMP_SPI && this->debug) {
+    if (in != SPI_SPECIAL_IDLE || out != SPI_SPECIAL_IDLE) {
+      dump_byte(this->debug, "SPI: >> ", out, false);
+      dump_byte(this->debug, " << ", in);
+    }
   }
-  #endif
   return in;
 }
 
@@ -674,10 +663,10 @@ void GSCore::writeRaw(const uint8_t *buf, uint16_t len)
   if (this->serial) {
     if (this->unrecoverableError)
       return;
-    #ifdef GS_DUMP_BYTES
-    for (uint16_t i = 0; i < len; ++i)
-      dump_byte(">= ", buf[i]);
-    #endif
+    if (GS_DUMP_BYTES && this->debug) {
+      for (uint16_t i = 0; i < len; ++i)
+        dump_byte(this->debug, ">= ", buf[i]);
+    }
     this->serial->write(buf, len);
   } else if (this->ss_pin) {
     uint16_t tries = 1024; // max 1k per loop
@@ -690,9 +679,8 @@ void GSCore::writeRaw(const uint8_t *buf, uint16_t len)
         tries--;
         processIncoming(processSpiSpecial(transferSpi(SPI_SPECIAL_IDLE)));
       } else {
-        #ifdef GS_DUMP_BYTES
-        dump_byte(">= ", *buf);
-        #endif
+        if (GS_DUMP_BYTES && this->debug)
+          dump_byte(this->debug, ">= ", *buf);
         if (isSpiSpecial(*buf)) {
           processIncoming(processSpiSpecial(transferSpi(SPI_SPECIAL_ESC)));
           processIncoming(processSpiSpecial(transferSpi(*buf ^ SPI_ESC_XOR)));
@@ -713,10 +701,8 @@ int GSCore::readRaw()
     return -1;
   if (this->serial) {
     c = this->serial->read();
-    #ifdef GS_DUMP_BYTES
-    if (c >= 0)
-      dump_byte("<= ", c);
-    #endif
+    if (GS_DUMP_BYTES && this->debug)
+      dump_byte(this->debug, "<= ", c);
   } else if (this->ss_pin != INVALID_PIN) {
 
     // When the data ready pin (GPIO28) is low, there is no point in
@@ -782,9 +768,8 @@ int GSCore::readRaw()
       c = processSpiSpecial(transferSpi(SPI_SPECIAL_IDLE));
     } while (c == -1 && --tries > 0);
   } else {
-    #ifdef GS_LOG_ERRORS
-      SERIAL_PORT_MONITOR.println("Begin() not called!");
-    #endif
+    if (GS_LOG_ERRORS && this->error)
+      this->error->println("Begin() not called!");
     return -1;
   }
   return c;
@@ -840,9 +825,8 @@ int GSCore::processSpiSpecial(uint8_t c)
     switch(c) {
       case SPI_SPECIAL_ALL_ONE:
         // TODO: Handle these? Flag an error? Wait for SPI_SPECIAL_ACK?
-        #ifdef GS_LOG_ERRORS
-        SERIAL_PORT_MONITOR.println("SPI 0xff?");
-        #endif
+        if (GS_LOG_ERRORS && this->error)
+          this->error->println("SPI 0xff?");
         // Flag an unrecoverable error after 20 successive 0xff reads.
         // We've seen the gainspan module spewing 0xff (rather, dropping
         // off the bus, probably) at random moments. Once this happens,
@@ -857,15 +841,13 @@ int GSCore::processSpiSpecial(uint8_t c)
         // Seems these happen when saving the current profile to flash
         // (probably because the APP firmware is too busy to refill the
         // SPI buffer in the module).
-        #ifdef GS_LOG_ERRORS_VERBOSE
-        SERIAL_PORT_MONITOR.println("SPI 0x00?");
-        #endif
+        if (GS_LOG_ERRORS_VERBOSE && this->error)
+          this->error->println("SPI 0x00?");
         break;
       case SPI_SPECIAL_ACK:
         // TODO: What does this one mean exactly?
-        #ifdef GS_LOG_ERRORS
-        SERIAL_PORT_MONITOR.println("SPI ACK received?");
-        #endif
+        if (GS_LOG_ERRORS && this->error)
+          this->error->println("SPI ACK received?");
         break;
       case SPI_SPECIAL_IDLE:
         break;
@@ -883,10 +865,8 @@ int GSCore::processSpiSpecial(uint8_t c)
         break;
     }
   }
-  #ifdef GS_DUMP_BYTES
-  if (res >= 0)
-    dump_byte("<= ", res);
-  #endif
+  if (GS_DUMP_BYTES && this->debug)
+    dump_byte(this->debug, "<= ", res);
   return res;
 }
 
@@ -917,15 +897,13 @@ bool GSCore::processIncoming(int c)
         // Escape character, incoming data
         this->rx_state = GS_RX_ESC;
       } else {
-        #ifdef GS_LOG_ERRORS_VERBOSE
-          // Don't log \r\n, since the synchronous response parsing
-          // often leaves a \n behind. Only log in VERBOSE, since some
-          // async responses also have data preceding them (like
-          // NWCONN-SUCCESS that prints info about the IP configuration
-          // _before_ the actual async response...).
-          if (c != '\n' && c != '\r')
-            dump_byte("Discarding non-escaped byte, no synchronous response expected: ", c);
-        #endif
+        // Don't log \r\n, since the synchronous response parsing
+        // often leaves a \n behind. Only log in VERBOSE, since some
+        // async responses also have data preceding them (like
+        // NWCONN-SUCCESS that prints info about the IP configuration
+        // _before_ the actual async response...).
+        if (c != '\n' && c != '\r' && GS_LOG_ERRORS_VERBOSE && this->error)
+          dump_byte(this->error, "Discarding non-escaped byte, no synchronous response expected: ", c);
       }
       break;
 
@@ -960,11 +938,11 @@ bool GSCore::processIncoming(int c)
           // Unknown escape sequence? Revert to GS_RX_IDLE and hope for
           // the best...
           this->rx_state = GS_RX_IDLE;
-          #ifdef GS_LOG_ERRORS
-            SERIAL_PORT_MONITOR.print("Unknown escape sequence: <Esc>");
-            SERIAL_PORT_MONITOR.write(c);
-            SERIAL_PORT_MONITOR.println();
-          #endif
+          if (GS_LOG_ERRORS && this->error) {
+            this->error->print("Unknown escape sequence: <Esc>");
+            this->error->write(c);
+            this->error->println();
+          }
       }
       break;
     case GS_RX_ESC_y_1:
@@ -976,9 +954,8 @@ bool GSCore::processIncoming(int c)
       if (this->rx_async_len < sizeof(this->rx_async)) {
         this->rx_async[this->rx_async_len++] = c;
       } else {
-        #ifdef GS_LOG_ERRORS
-          SERIAL_PORT_MONITOR.println("rx_async is full");
-        #endif
+        if (GS_LOG_ERRORS && this->error)
+          this->error->println("rx_async is full");
       }
 
       // Finished reading the header or body, find out out what to do with it
@@ -989,22 +966,22 @@ bool GSCore::processIncoming(int c)
             if (parseNumber(&this->head_frame.cid, this->rx_async, 1, 16) &&
                 parseNumber(&this->head_frame.length, this->rx_async + 1, 4, 10)) {
               this->head_frame.udp_server = false;
-              #ifdef GS_DUMP_LINES
-              SERIAL_PORT_MONITOR.print("<<| Read bulk data frame for cid ");
-              SERIAL_PORT_MONITOR.print(this->head_frame.cid);
-              SERIAL_PORT_MONITOR.print(" containing ");
-              SERIAL_PORT_MONITOR.print(this->head_frame.length);
-              SERIAL_PORT_MONITOR.println(" bytes");
-              #endif
+              if (GS_DUMP_LINES && this->debug) {
+                this->debug->print("<<| Read bulk data frame for cid ");
+                this->debug->print(this->head_frame.cid);
+                this->debug->print(" containing ");
+                this->debug->print(this->head_frame.length);
+                this->debug->println(" bytes");
+              }
               // Store the frame header and prepare to read data
               bufferFrameHeader(&this->head_frame);
               this->rx_state = GS_RX_BULK;
             } else {
-              #if defined(GS_LOG_ERRORS) || defined(GS_DUMP_LINES)
-                SERIAL_PORT_MONITOR.print("Invalid escape sequence: <ESC>Z");
-                SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
-                SERIAL_PORT_MONITOR.println();
-              #endif
+              if (GS_LOG_ERRORS && this->error) {
+                this->error->print("Invalid escape sequence: <ESC>Z");
+                this->error->write(this->rx_async, this->rx_async_len);
+                this->error->println();
+              }
               // Revert to GS_RX_IDLE and hope for the best...
               this->rx_state = GS_RX_IDLE;
             }
@@ -1027,11 +1004,11 @@ bool GSCore::processIncoming(int c)
         case GS_RX_ESC_y_3:
         {
           if (--this->rx_async_left == 0) {
-            #ifdef GS_DUMP_LINES
-              SERIAL_PORT_MONITOR.print("<<| Read async header: <ESC>y");
-              SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
-              SERIAL_PORT_MONITOR.println();
-            #endif
+            if (GS_DUMP_LINES && this->debug) {
+              this->debug->print("<<| Read async header: <ESC>y");
+              this->debug->write(this->rx_async, this->rx_async_len);
+              this->debug->println();
+            }
 
             // <cid><ip> <port>\t<length 4 ascii char><data>
             uint8_t * const ipstart = this->rx_async + 1;
@@ -1056,27 +1033,27 @@ bool GSCore::processIncoming(int c)
               // broadcast address (255.255.255.255).
               this->head_frame.udp_server = true;
 
-              #ifdef GS_DUMP_LINES
-              SERIAL_PORT_MONITOR.print("<<| Read bulk UDP server data frame for cid ");
-              SERIAL_PORT_MONITOR.print(this->head_frame.cid);
-              SERIAL_PORT_MONITOR.print(" from ");
-              SERIAL_PORT_MONITOR.write(ipstart, iplen);
-              SERIAL_PORT_MONITOR.print(":");
-              SERIAL_PORT_MONITOR.write(portstart, portlen);
-              SERIAL_PORT_MONITOR.print(" containing ");
-              SERIAL_PORT_MONITOR.print(this->head_frame.length);
-              SERIAL_PORT_MONITOR.println(" bytes");
-              #endif
+              if (GS_DUMP_LINES && this->debug) {
+                this->debug->print("<<| Read bulk UDP server data frame for cid ");
+                this->debug->print(this->head_frame.cid);
+                this->debug->print(" from ");
+                this->debug->write(ipstart, iplen);
+                this->debug->print(":");
+                this->debug->write(portstart, portlen);
+                this->debug->print(" containing ");
+                this->debug->print(this->head_frame.length);
+                this->debug->println(" bytes");
+              }
 
               // Store the frame header and prepare to read data
               bufferFrameHeader(&this->head_frame);
               this->rx_state = GS_RX_BULK;
             } else {
-              #ifdef GS_LOG_ERRORS
-                SERIAL_PORT_MONITOR.print("Invalid escape sequence: <ESC>y");
-                SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
-                SERIAL_PORT_MONITOR.println();
-              #endif
+              if (GS_LOG_ERRORS && this->error) {
+                this->error->print("Invalid escape sequence: <ESC>y");
+                this->error->write(this->rx_async, this->rx_async_len);
+                this->error->println();
+              }
               // Revert to GS_RX_IDLE and hope for the best...
               this->rx_state = GS_RX_IDLE;
             }
@@ -1086,22 +1063,22 @@ bool GSCore::processIncoming(int c)
 
         case GS_RX_ESC_A:
           if (--this->rx_async_left == 0) {
-            #ifdef GS_DUMP_LINES
-              SERIAL_PORT_MONITOR.print("<<| Read async header: <ESC>A");
-              SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
-              SERIAL_PORT_MONITOR.println();
-            #endif
+            if (GS_DUMP_LINES && this->debug) {
+              this->debug->print("<<| Read async header: <ESC>A");
+              this->debug->write(this->rx_async, this->rx_async_len);
+              this->debug->println();
+            }
             // <Subtype><length 2 ascii char><data>
             if (parseNumber(&this->rx_async_subtype, this->rx_async, 1, 16) &&
                 parseNumber(&this->rx_async_left, this->rx_async + 1, 2, 10)) {
               this->rx_state = GS_RX_ASYNC;
               this->rx_async_len = 0;
             } else {
-              #ifdef GS_LOG_ERRORS
-                SERIAL_PORT_MONITOR.print("Invalid escape sequence: <ESC>A");
-                SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
-                SERIAL_PORT_MONITOR.println();
-              #endif
+              if (GS_LOG_ERRORS && this->error) {
+                this->error->print("Invalid escape sequence: <ESC>A");
+                this->error->write(this->rx_async, this->rx_async_len);
+                this->error->println();
+              }
               // Revert to GS_RX_IDLE and hope for the best...
               this->rx_state = GS_RX_IDLE;
             }
@@ -1111,21 +1088,21 @@ bool GSCore::processIncoming(int c)
         case GS_RX_ASYNC:
           if (--this->rx_async_left == 0) {
             this->rx_state = GS_RX_IDLE;
-            #ifdef GS_DUMP_LINES
-              SERIAL_PORT_MONITOR.print("<<| Read async data: ");
-              SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
-              SERIAL_PORT_MONITOR.println();
-            #endif
+            if (GS_DUMP_LINES && this->debug) {
+              this->debug->print("<<| Read async data: ");
+              this->debug->write(this->rx_async, this->rx_async_len);
+              this->debug->println();
+            }
             if (!processAsync()) {
-              #ifdef GS_LOG_ERRORS
-                SERIAL_PORT_MONITOR.print("Unknown async reponse: subtype=");
-                SERIAL_PORT_MONITOR.print(this->rx_async_subtype);
-                SERIAL_PORT_MONITOR.print(", length=");
-                SERIAL_PORT_MONITOR.print(this->rx_async_len);
-                SERIAL_PORT_MONITOR.print(", data=");
-                SERIAL_PORT_MONITOR.write(this->rx_async, this->rx_async_len);
-                SERIAL_PORT_MONITOR.println();
-              #endif
+              if (GS_LOG_ERRORS && this->error) {
+                this->error->print("Unknown async reponse: subtype=");
+                this->error->print(this->rx_async_subtype);
+                this->error->print(", length=");
+                this->error->print(this->rx_async_len);
+                this->error->print(", data=");
+                this->error->write(this->rx_async, this->rx_async_len);
+                this->error->println();
+              }
             }
             break;
           }
@@ -1269,10 +1246,10 @@ void GSCore::dropData(uint8_t num_bytes) {
   while(num_bytes--) {
     cid_t cid;
     if (readData(&cid) >= 0) {
-      #ifdef GS_LOG_ERRORS
-        SERIAL_PORT_MONITOR.print("rx_data is full, dropped byte for cid ");
-        SERIAL_PORT_MONITOR.println(cid);
-      #endif
+      if (GS_LOG_ERRORS && this->error) {
+        this->error->print("rx_data is full, dropped byte for cid ");
+        this->error->println(cid);
+      }
       this->connections[cid].error = true;
     }
   }
@@ -1292,11 +1269,11 @@ GSCore::GSResponse GSCore::processResponseLine(const uint8_t* buf, uint8_t len, 
   // anything is different from what we expect, return
   // GS_UNKNOWN_RESPONSE assuming that it is just arbitrary data.
 
-  #ifdef GS_DUMP_LINES
-  SERIAL_PORT_MONITOR.print("<<= ");
-  SERIAL_PORT_MONITOR.write(buf, len);
-  SERIAL_PORT_MONITOR.println();
-  #endif
+  if (GS_DUMP_LINES && this->debug) {
+    this->debug->print("<<= ");
+    this->debug->write(buf, len);
+    this->debug->println();
+  }
 
   // In non-verbose mode, command responses are an (string containing a)
   // number from "0" to "18"
@@ -1370,28 +1347,28 @@ GSCore::GSResponse GSCore::processResponseLine(const uint8_t* buf, uint8_t len, 
 
       return code;
 
-    #ifdef GS_LOG_ERRORS
-    // These are asynchronous responses and with AT+ASYNCMSGFMT=1, we
-    // shouldn't be receiving them here...
-    case GS_DISASSO_EVT:
-    case GS_STBY_TMR_EVT:
-    case GS_STBY_ALM_EVT:
-    case GS_DPSLEEP_EVT:
-    case GS_BOOT_UNEXPEC:
-    case GS_BOOT_INTERNAL:
-    case GS_BOOT_EXTERNAL:
-    case GS_NWCONN_SUCCESS:
-      if (arg_len > 0)
+    if (GS_LOG_ERRORS && this->error) {
+      // These are asynchronous responses and with AT+ASYNCMSGFMT=1, we
+      // shouldn't be receiving them here...
+      case GS_DISASSO_EVT:
+      case GS_STBY_TMR_EVT:
+      case GS_STBY_ALM_EVT:
+      case GS_DPSLEEP_EVT:
+      case GS_BOOT_UNEXPEC:
+      case GS_BOOT_INTERNAL:
+      case GS_BOOT_EXTERNAL:
+      case GS_NWCONN_SUCCESS:
+        if (arg_len > 0)
+          return GS_UNKNOWN_RESPONSE;
+        // fallthrough //
+      case GS_ECIDCLOSE:
+        if (arg_len > 2)
+          return GS_UNKNOWN_RESPONSE;
+          this->error->print("Received asynchronous response synchronously: ");
+          this->error->write(buf, len);
+          this->error->println();
         return GS_UNKNOWN_RESPONSE;
-      // fallthrough //
-    case GS_ECIDCLOSE:
-      if (arg_len > 2)
-        return GS_UNKNOWN_RESPONSE;
-        SERIAL_PORT_MONITOR.print("Received asynchronous response synchronously: ");
-        SERIAL_PORT_MONITOR.write(buf, len);
-        SERIAL_PORT_MONITOR.println();
-      return GS_UNKNOWN_RESPONSE;
-    #endif
+    }
 
     // Make the compiler happy
     default:
@@ -1489,10 +1466,10 @@ bool GSCore::processAsync()
         // Documentation is unclear, but experimentation shows that when
         // this happens, some data might have been lost and the
         // connection is broken.
-        #ifdef GS_LOG_ERRORS
-          SERIAL_PORT_MONITOR.print("Socket error on cid ");
-          SERIAL_PORT_MONITOR.println(cid);
-        #endif
+        if (GS_LOG_ERRORS && this->error) {
+          this->error->print("Socket error on cid ");
+          this->error->println(cid);
+        }
         this->connections[cid].error = true;
       }
       processDisconnect(cid);
