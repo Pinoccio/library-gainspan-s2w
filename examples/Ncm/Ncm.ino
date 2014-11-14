@@ -39,14 +39,6 @@ void setup() {
   delay(2000);
   Serial.begin(115200);
 
-  // Use an UART
-  //Serial1.begin(115200);
-  //gs.begin(Serial1);
-
-  // Use SPI at 2Mhz (GS1500 supports up to 3.5Mhz)
-  SPI.setClockDivider(SPI_CLOCK_DIV8);
-  SPI.begin();
-
   // Set event handlers and let them print to Serial
   gs.onNcmConnect = onNcmConnect;
   gs.onNcmDisconnect = onNcmDisconnect;
@@ -54,6 +46,11 @@ void setup() {
   gs.onDisassociate = onDisassociate;
   gs.eventData = &Serial;
 
+  // Use an UART
+  //Serial1.begin(115200);
+  //gs.begin(Serial1);
+
+  // Use SPI with SS on pin 7
   gs.begin(7);
 
 #if defined(GS_INIT) || defined(GS_ONCE)

@@ -30,6 +30,11 @@
 #include <stdint.h>
 #include <Stream.h>
 #include <IPAddress.h>
+#include <SPI.h>
+
+#if !defined(SPI_HAS_TRANSACTION) || !SPI_HAS_TRANSACTION
+#error "This library requires Arduino IDE 1.5.8 or above, supporting the SPI transaction API"
+#endif
 
 // NOTE: In addition to enable output here, an output target should also
 // be supplied at runtime by calling the setLogOutput method.
@@ -135,6 +140,10 @@ public:
   /**
    * Set up this library to talk over SPI.
    *
+   * This calls SPI.begin and sets the clock rate and other settings on
+   * every transfer using SPI.beginTransaction, so ther is no need to
+   * call SPI.begin or SPI.setClockDivider beforehand.
+   *
    * @param ss          The Arduino pin number that is connected to the
    *                    Gainspan's SPI Slave Select pin. Will be
    *                    configured as an output pin automatically.
@@ -147,8 +156,12 @@ public:
    *                    this pin. This is not recommended, as it adds
    *                    extra delays and latencies and is not documented
    *                    to work by Gainspan.
+   * @param settings    The SPI settings to use. Defaults to (up to)
+   *                    1.2Mhz as reported by Gainspan (even though the
+   *                    datasheet suggests that 3.5Mhz should be
+   *                    possible).
    */
-  bool begin(uint8_t ss, uint8_t data_read = INVALID_PIN);
+  bool begin(uint8_t ss, uint8_t data_read = INVALID_PIN, SPISettings spi_settings = SPISettings(1200000, MSBFIRST, SPI_MODE0));
 
   /**
    * Clean up this library (for example to switch from UART to SPI).
@@ -738,6 +751,8 @@ protected:
   uint8_t ss_pin = INVALID_PIN;
   /** The data_ready pin to use, in SPI mode */
   uint8_t data_ready_pin = INVALID_PIN;
+  /** The SPI settings to use, in SPI mode */
+  SPISettings spi_settings;
   /** When true, the module has sent xoff */
   bool spi_xoff;
   /** When true, the previous SPI byte was an escape character */

@@ -81,7 +81,7 @@ bool GSCore::begin(Stream &serial)
   return res;
 }
 
-bool GSCore::begin(uint8_t ss, uint8_t data_ready)
+bool GSCore::begin(uint8_t ss, uint8_t data_ready, SPISettings settings)
 {
   if (this->serial || this->ss_pin != INVALID_PIN || ss == INVALID_PIN)
     return false;
@@ -89,9 +89,10 @@ bool GSCore::begin(uint8_t ss, uint8_t data_ready)
   this->initializing = true;
   this->ss_pin = ss;
   this->data_ready_pin = data_ready;
-
+  this->spi_settings = settings;
   pinMode(ss, OUTPUT);
   digitalWrite(ss, HIGH);
+  SPI.begin();
 
   bool res = _begin();
   this->initializing = false;
@@ -646,9 +647,11 @@ uint8_t GSCore::transferSpi(uint8_t out)
 {
   // Note that we need to toggle SS for every byte, otherwise the module
   // will ignore subsequent bytes and return 0xff
+  SPI.beginTransaction(this->spi_settings);
   digitalWrite(this->ss_pin, LOW);
   uint8_t in = SPI.transfer(out);
   digitalWrite(this->ss_pin, HIGH);
+  SPI.endTransaction();
   if (GS_DUMP_SPI && this->debug) {
     if (in != SPI_SPECIAL_IDLE || out != SPI_SPECIAL_IDLE) {
       dump_byte(this->debug, "SPI: >> ", out, false);

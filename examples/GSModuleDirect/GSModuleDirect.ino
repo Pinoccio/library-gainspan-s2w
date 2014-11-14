@@ -24,9 +24,7 @@ void setup() {
   //Serial1.begin(115200);
   //gs.begin(Serial1);
 
-  // Use SPI at 2Mhz (GS1500 supports up to 3.5Mhz)
-  SPI.setClockDivider(SPI_CLOCK_DIV8);
-  SPI.begin();
+  // Use SPI with SS on pin 7
   gs.begin(7);
 
   // Write a custom command
